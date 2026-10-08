@@ -70,6 +70,61 @@ public sealed class RepositoryConventionTests
     }
 
     [Theory]
+    [InlineData("build")]
+    [InlineData("test")]
+    [InlineData("clean")]
+    [InlineData("sdk")]
+    public void BuildScript_MustNotRunDotnetInsideParentheticalBlock(string subcommand)
+    {
+        // 曾因把子命令写成 if (...) ( ... exit /b %ERRORLEVEL% ) 而埋下严重缺陷：
+        // cmd.exe 在**解析**括号块时就展开 %ERRORLEVEL%，此时 dotnet 尚未执行，
+        // 拿到的是上一条命令的旧值 0 —— 于是无论构建或测试是否失败，
+        // build.cmd 一律返回 0，把编译错误伪装成"测试全部通过"。
+        // 架构守卫一旦被这样绕过就等于不存在。
+        //
+        // 因此子命令必须走 goto 标签，在块外执行 exit /b %ERRORLEVEL%。
+        var script = File.ReadAllText(Path.Combine(SolutionRoot, "build.cmd"));
+
+        // 匹配形如： if /i "%1"=="test" ( ... 的一行
+        var blockStart = System.Text.RegularExpressions.Regex.Match(
+            script,
+            $@"if\s+/i\s+""%1""==""{subcommand}""\s*\(",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        Assert.False(
+            blockStart.Success,
+            $"build.cmd 的 {subcommand} 分支被放进了 if (...) 块。"
+            + "%ERRORLEVEL% 会在解析期展开，导致失败被隐藏为成功。"
+            + "请改用 goto 标签形式（见脚本内注释）。");
+    }
+
+    [Theory]
+    [InlineData("build")]
+    [InlineData("test")]
+    [InlineData("clean")]
+    [InlineData("sdk")]
+    public void BuildScript_MustPropagateExitCodeForEachSubcommand(string subcommand)
+    {
+        // 与上一条配对：每个子命令都必须以 dotnet 的真实退出码收尾，
+        // 否则 CI 与人工校验都无法察觉失败。
+        var script = File.ReadAllText(Path.Combine(SolutionRoot, "build.cmd"));
+
+        var label = $":do_{subcommand}";
+        var labelIndex = script.IndexOf(label, StringComparison.OrdinalIgnoreCase);
+
+        Assert.True(
+            labelIndex >= 0,
+            $"build.cmd 缺少 {label} 标签，无法传递退出码。");
+
+        var afterLabel = script[labelIndex..];
+        var nextLabel = afterLabel.IndexOf(":do_", 1, StringComparison.OrdinalIgnoreCase);
+
+        var body = nextLabel > 0 ? afterLabel[..nextLabel] : afterLabel;
+
+        Assert.Contains("exit /b %ERRORLEVEL%", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
     [InlineData("bin/", "bin")]
     [InlineData("obj/", "obj")]
     public void GitIgnore_MustExcludeBuildOutput(string entry, string directoryName)

@@ -28,25 +28,17 @@ if not exist "%DOTNET%" (
 set "SLNX=%~dp0ReleaseWatcher.slnx"
 set "CONFIG=Release"
 
-if /i "%1"=="build" (
-    "%DOTNET%" build "%SLNX%" -c %CONFIG%
-    exit /b %ERRORLEVEL%
-)
+rem IMPORTANT: each subcommand jumps to a label instead of living
+rem inside an "if (...)" block. In a parenthesized block cmd.exe expands
+rem %ERRORLEVEL% at PARSE time, i.e. BEFORE dotnet runs, so it would
+rem always yield the stale value 0 and hide build failures. A test run
+rem that failed to compile would still report success. Do not convert
+rem these back to if-blocks. Guarded by RepositoryConventionTests.
 
-if /i "%1"=="test" (
-    "%DOTNET%" test "%SLNX%" -c %CONFIG%
-    exit /b %ERRORLEVEL%
-)
-
-if /i "%1"=="clean" (
-    "%DOTNET%" clean "%SLNX%" -c %CONFIG%
-    exit /b %ERRORLEVEL%
-)
-
-if /i "%1"=="sdk" (
-    "%DOTNET%" --list-sdks
-    exit /b %ERRORLEVEL%
-)
+if /i "%1"=="build"    goto do_build
+if /i "%1"=="test"     goto do_test
+if /i "%1"=="clean"    goto do_clean
+if /i "%1"=="sdk"      goto do_sdk
 
 rem Publishing is a release step and requires explicit user
 rem authorization per AGENTS.md section 1.5. Intentionally
@@ -67,3 +59,19 @@ echo.
 echo dotnet : "%DOTNET%"
 echo slnx   : "%SLNX%"
 exit /b 0
+
+:do_build
+"%DOTNET%" build "%SLNX%" -c %CONFIG%
+exit /b %ERRORLEVEL%
+
+:do_test
+"%DOTNET%" test "%SLNX%" -c %CONFIG%
+exit /b %ERRORLEVEL%
+
+:do_clean
+"%DOTNET%" clean "%SLNX%" -c %CONFIG%
+exit /b %ERRORLEVEL%
+
+:do_sdk
+"%DOTNET%" --list-sdks
+exit /b %ERRORLEVEL%
