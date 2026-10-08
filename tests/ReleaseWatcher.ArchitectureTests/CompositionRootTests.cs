@@ -15,14 +15,21 @@ namespace ReleaseWatcher.ArchitectureTests;
 public sealed class CompositionRootTests
 {
     /// <summary>
-    /// 唯一允许直接依赖 Infrastructure 的文件后缀白名单。
-    /// DI 注册本质上是把实现类型暴露给容器，无法完全避免 using。
-    /// </summary>
-    private static readonly string[] CompositionRootFileSuffixes =
+/// 允许直接依赖 Infrastructure 的文件。
+/// </summary>
+/// <remarks>
+/// D-037：App 对 Infrastructure 的引用<strong>仅用于 DI 组合根</strong>。
+/// 本白名单是这条约束的唯一例外入口，因此必须<strong>尽可能收窄</strong>。
+///
+/// <para>
+/// 当前只有 <c>AppServices.cs</c> 一个文件（组合根本体）。
+/// 若将来注册代码散落到多个文件，应逐一在此登记，
+/// 而不是用宽泛的后缀匹配（如 <c>*Services.cs</c>）放宽限制。
+/// </para>
+/// </remarks>
+private static readonly string[] CompositionRootFiles =
     [
         "AppServices.cs",
-        "CompositionRoot.cs",
-        "ServiceCollectionExtensions.cs",
     ];
 
     private static string SolutionRoot => SolutionLayout.SolutionRoot;
@@ -40,7 +47,12 @@ public sealed class CompositionRootTests
     ];
 
     private static bool IsCompositionRoot(string filePath)
-        => CompositionRootFileSuffixes.Any(suffix => filePath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+    {
+        // 按**文件名精确匹配**而非后缀/通配，避免白名单被无意放宽。
+        var fileName = Path.GetFileName(filePath);
+        return CompositionRootFiles.Any(
+            allowed => string.Equals(allowed, fileName, StringComparison.OrdinalIgnoreCase));
+    }
 
     [Fact]
     public void AppViewModels_MustNotUsingInfrastructure()
@@ -73,30 +85,48 @@ public sealed class CompositionRootTests
     }
 
     /// <summary>
-    /// 约束覆盖度自检：确认 D-037 的组合根文件已存在。
+    /// 确认 D-037 的组合根文件已实际落地。
     /// </summary>
     /// <remarks>
-    /// <b>当前为跳过状态（已实现 1 / 跳过 1）。</b>
+    /// 这条断言检查的不是"是否违规"，而是"守卫是否有效"。
+    /// 若组合根文件不存在，<see cref="CompositionRootFiles"/> 白名单就形同虚设 ——
+    /// 它可以随时被添加条目放宽，属于无强制状态。
     ///
-    /// 这条断言本身不是检查"是否违规"，而是检查"守卫是否有效"：
-    /// 若组合根文件始终不落地，D-037 就一直只靠文件后缀白名单兜底 ——
-    /// 白名单可以随时被放宽，属于无强制状态。
-    ///
-    /// 一旦创建 <c>src/ReleaseWatcher.App/AppServices.cs</c>，
-    /// 本测试自动变为通过，同时应把 <see cref="CompositionRootFileSuffixes"/> 收窄至实际文件。
+    /// 白名单中的每个文件名都必须真实存在于
+    /// <c>src/ReleaseWatcher.App/</c> 下 —— 否则说明白名单已被放宽到无意义。
     /// </remarks>
-    [Fact(Skip = "尚未创建 AppServices.cs。创建组合根文件后本测试应转为通过。")]
-    public void CompositionRootFile_ShouldExist()
+    [Fact]
+    public void EveryAllowedCompositionRootFile_MustActuallyExist()
     {
-        var hasCompositionRoot = Directory
-            .EnumerateFiles(SolutionRoot, "*.cs", SearchOption.AllDirectories)
-            .Where(p => !IsUnderBuildOutput(p))
-            .Any(IsCompositionRoot);
+        foreach (var allowed in CompositionRootFiles)
+        {
+            var expected = Path.Combine(SolutionRoot, "src", "ReleaseWatcher.App", allowed);
+            Assert.True(
+                File.Exists(expected),
+                $"白名单登记了 {allowed}，但该文件不存在。"
+                + "白名单必须与实际组合根文件严格对应 —— "
+                + "既不能登记不存在的文件，也不应为了绕过检查而添加条目。");
+        }
+    }
 
-        Assert.True(
-            hasCompositionRoot,
-            "未找到组合根文件。建议创建 src/ReleaseWatcher.App/AppServices.cs 集中注册，"
-            + "并将 CompositionRootFileSuffixes 收窄为实际文件。");
+    [Fact]
+    public void AppMust_HaveExactlyOneCompositionRoot()
+    {
+        // 组合根的价值在于"唯一知道接口对应哪个实现的地方"。
+        // 出现第二个注册文件意味着注册逻辑开始分散，D-037 的约束随之松动。
+        var candidates = Directory
+            .EnumerateFiles(
+                Path.Combine(SolutionRoot, "src", "ReleaseWatcher.App"),
+                "*.cs", SearchOption.AllDirectories)
+            .Where(p => !IsUnderBuildOutput(p))
+            .Select(p => Path.GetFileName(p))
+            .Where(name => name.Contains("Services", StringComparison.OrdinalIgnoreCase)
+                        || name.Contains("CompositionRoot", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.Equal(["AppServices.cs"], candidates.ToArray());
     }
 
     private static void AssertNoInfrastructureDependency(string relativeDirectory)

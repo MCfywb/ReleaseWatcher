@@ -1,8 +1,27 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    ReleaseWatcher 基础设施层
+    ============================================================
+    职责：平台交互与外部系统的具体实现（SQLite 文件、aria2c 进程、
+    Windows Known Folder、路径组合等）。只被 App 的组合根引用（D-037）。
+
+    依赖方向：Infrastructure → Application, Domain；不反向（D-003）。
+  -->
+
   <ItemGroup>
     <ProjectReference Include="..\ReleaseWatcher.Application\ReleaseWatcher.Application.csproj" />
     <ProjectReference Include="..\ReleaseWatcher.Domain\ReleaseWatcher.Domain.csproj" />
+  </ItemGroup>
+
+  <!--
+    仅向 Infrastructure.Tests 开放 internal 成员。
+    起因：WindowsPathResolver.NormalizeDirectory 是路径拼接的基石，
+    需要被单元测试锁定，但它不该成为对外公开的实现细节。
+    不设全局 InternalsVisibleTo —— 只对测试程序集开这一个口子。
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="ReleaseWatcher.Infrastructure.Tests" />
   </ItemGroup>
 
   <PropertyGroup>

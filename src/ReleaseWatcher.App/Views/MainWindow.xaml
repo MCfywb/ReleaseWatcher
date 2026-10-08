@@ -1,0 +1,20 @@
+﻿<Window x:Class="ReleaseWatcher.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ReleaseWatcher">
+
+    <!--
+        结构骨架，非最终设计。
+
+        Phase 1（Design System + 静态 UI）将替换本文件：
+        - Sidebar（概览 / 检测列表 / 下载 / 设置，见 DECISIONS.md D-027）
+        - Toolbar
+        - 检测列表的 Sidebar + Repository List + Release Detail 三栏 Split View
+
+        本阶段只验证组合根与 DI 链路能否跑通，故仅放置一个空 Grid。
+        视觉规范（配色、字阶、间距、圆角）见 docs/reference/development-plan-ui.md，
+        不得在此硬编码 —— 应统一走 Resources/ThemeBrushes.xaml（D-026）。
+    -->
+    <Grid />
+
+</Window>

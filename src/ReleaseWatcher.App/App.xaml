@@ -2,8 +2,21 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:ReleaseWatcher.App"
-             StartupUri="MainWindow.xaml">
+             ShutdownMode="OnExplicitShutdown">
+    <!--
+        StartupUri 已移除（原本为 MainWindow.xaml）。
+
+        原因：主窗口改为由 DI 容器创建，以便其构造函数可注入依赖
+        （见 App.xaml.cs 的 OnStartup）。保留 StartupUri 会导致窗口被自动
+        实例化两次 —— 一次无依赖的默认实例，一次容器创建的实例。
+
+        ShutdownMode="OnExplicitShutdown"：关闭主窗口不直接结束进程。
+        依据 DECISIONS.md D-026（设置项含"关闭窗口时最小化到托盘"）
+        与"驻留后台定时检测"的产品目标。
+        注意：托盘功能本身尚未实现，当前关闭主窗口会导致进程无窗口残留
+        —— 这是已知待修项，见 NOW.md。实现托盘时由托盘菜单项显式调用
+        Application.Current.Shutdown() 退出。
+    -->
     <Application.Resources>
-         
     </Application.Resources>
 </Application>
