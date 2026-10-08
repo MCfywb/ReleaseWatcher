@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ReleaseWatcher 基础设施层单元测试项目
+    ============================================================
+    职责：测试 Infrastructure 中可隔离于真实运行环境的类型。
+
+    与 ReleaseWatcher.ArchitectureTests 的分工（D-040 的预留，此处兑现）：
+      ArchitectureTests    守护架构约定，**故意零引用**主项目；
+                          检查对象是 .csproj 文本本身，引用主项目会造成自我循环。
+      本项目              测试具体实现，**必须**引用被测项目，
+                          否则拿不到真实类型 —— 这是与上一个项目相反的取舍。
+
+    目前覆盖：
+      AppPathsTests  IAppPaths 的两条分支（Portable / 安装版）。
+                   安装版分支靠 IWindowsPathResolver 的假实现覆盖，
+                   真实探测在测试机上永远走不到（程序目录几乎必然可写）。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ReleaseWatcher.Infrastructure\ReleaseWatcher.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

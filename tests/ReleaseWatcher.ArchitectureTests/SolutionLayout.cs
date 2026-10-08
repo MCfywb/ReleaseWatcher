@@ -4,7 +4,9 @@ namespace ReleaseWatcher.ArchitectureTests;
 /// 定位解决方案根目录，供架构检查读取工程文件。
 /// </summary>
 /// <remarks>
+/// <para>
 /// 本测试项目**故意不 ProjectReference** 主解决方案的任何项目，原因有三：
+/// </para>
 ///
 /// <list type="number">
 /// <item>架构检查的对象就是各项目的 <c>.csproj</c> 本身；
@@ -14,6 +16,13 @@ namespace ReleaseWatcher.ArchitectureTests;
 /// <item>与 D-019 确立的"物理独立、逻辑单向关联"思路一致：
 /// 检查者不侵入被检查者。</item>
 /// </list>
+///
+/// <para>
+/// <b>这不适用于单元测试项目。</b>
+/// <c>ReleaseWatcher.Infrastructure.Tests</c> 采取相反取舍 ——
+/// 它必须引用被测项目才能拿到类型，否则无从测试。
+/// 两个项目分工不同，约束也不同，切勿把「零引用」套用过去。
+/// </para>
 ///
 /// 依据：<c>DECISIONS.md</c> D-019 / D-037、<c>RISKS.md</c> R-007。
 /// </remarks>
@@ -29,6 +38,22 @@ public static class SolutionLayout
         "ReleaseWatcher.Application",
         "ReleaseWatcher.Infrastructure",
         "ReleaseWatcher.App",
+    ];
+
+    /// <summary>
+    /// 测试项目目录名。
+    /// </summary>
+    /// <remarks>
+    /// 两个测试项目的引用策略<strong>刻意相反</strong>：
+    /// 架构测试零引用（检查 .csproj 文本本身），
+    /// 单元测试必须引用被测项目（否则拿不到类型）。
+    /// 因此这里只登记名字，不统一约束引用方式 ——
+    /// 具体约束见 <c>LayeringTests</c> 中的对应断言。
+    /// </remarks>
+    public static readonly string[] TestProjects =
+    [
+        "ReleaseWatcher.ArchitectureTests",
+        "ReleaseWatcher.Infrastructure.Tests",
     ];
 
     /// <summary>

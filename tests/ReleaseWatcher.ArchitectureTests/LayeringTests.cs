@@ -115,7 +115,8 @@ public sealed class LayeringTests
     {
         // D-019 硬边界：LocalizationGenerator 是独立工作空间，物理独立、逻辑单向关联。
         // 任何 ProjectReference 都会把 Roslyn / TOML Parser 等开发期依赖拖入发布产物。
-        foreach (var project in SolutionLayout.LayerProjects)
+        // 测试项目同样受约束 —— 它会连带拖进被引用项目的一切。
+        foreach (var project in SolutionLayout.LayerProjects.Concat(SolutionLayout.TestProjects))
         {
             Assert.DoesNotContain(
                 ReferencedProjects(project),
@@ -124,11 +125,33 @@ public sealed class LayeringTests
     }
 
     [Fact]
-    public void TestProject_MustNotReferenceLayerProjects()
+    public void ArchitectureTestProject_MustNotReferenceLayerProjects()
     {
         // 见 SolutionLayout 的说明：架构检查的对象是 .csproj 本身，
         // 引用它们会造成自我循环，并把 WPF 拖入测试进程。
         Assert.Empty(ReferencedProjects("ReleaseWatcher.ArchitectureTests"));
+    }
+
+    [Fact]
+    public void UnitTestProject_MustOnlyReferenceInfrastructure()
+    {
+        // 单元测试项目与架构测试项目的取舍相反：它**必须**引用被测项目才能拿到类型。
+        // 但边界仍要守住 ——
+        //   不可引用 App：那会把 WPF 与 net10.0-windows 拖进测试进程，测试无法在非 Windows 上跑；
+        //   不可引用 Application / Domain 的测试包装层：当前无业务类型可测，提前引入只是噪音。
+        Assert.Equal(
+            ["ReleaseWatcher.Infrastructure"],
+            ReferencedProjects("ReleaseWatcher.Infrastructure.Tests"));
+    }
+
+    [Fact]
+    public void UnitTestProject_MustNotReferenceWpfApp()
+    {
+        // 上条断言的根因单独锁定：一旦有人为图方便直接引用 App，
+        // 测试会静默变成 WPF 进程，跨平台执行能力随之丧失。
+        Assert.DoesNotContain(
+            "ReleaseWatcher.App",
+            ReferencedProjects("ReleaseWatcher.Infrastructure.Tests"));
     }
 
     [Theory]
