@@ -1,0 +1,72 @@
+#markdown
+AGENTS.md
+DECISIONS.md
+MAP.md
+NOW.md
+PROJECT_INDEX.md
+RISKS.md
+RUNBOOK.md
+docs/
+history/
+
+# ============================================================
+#  以下为 2026-10-09 追加：构建产物与本地文件
+#  上方 9 条文档排除规则保持原样，不做任何修改（D-039）。
+# ============================================================
+
+# ---- 构建产物 ----
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+.idea/
+
+# ---- 测试与覆盖率 ----
+TestResults/
+*.coverage
+*.trx
+coverage*.json
+coverage*.xml
+
+# ---- 发布产物（依据 MAP.md 第 7 节）----
+*.Portable.zip
+*-Setup.exe
+*.sha256
+publish/
+artifacts/
+
+# ---- 运行时生成的用户数据（依据 MAP.md 第 4 节）----
+*.db
+*.db-shm
+*.db-wal
+logs/
+cache/
+runtime/
+
+# ---- 语言包生成过程中的备份文件 ----
+# 说明：localization/*.toml 本身需要纳入版本控制
+localization/*.bak
+localization/*~
+localization/*.tmp
+
+# ---- 密钥与本地覆盖（绝不提交，依据 AGENTS.md 第 1.4 节）----
+.env
+.env.*
+*.secret
+*.pfx
+*.p12
+*.key
+config.local.json
+
+# ---- 编辑器临时文件 ----
+*~
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

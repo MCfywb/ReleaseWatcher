@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ReleaseWatcher.App/ReleaseWatcher.App.csproj" />
+    <Project Path="src/ReleaseWatcher.Application/ReleaseWatcher.Application.csproj" />
+    <Project Path="src/ReleaseWatcher.Domain/ReleaseWatcher.Domain.csproj" />
+    <Project Path="src/ReleaseWatcher.Infrastructure/ReleaseWatcher.Infrastructure.csproj" />
+  </Folder>
+</Solution>

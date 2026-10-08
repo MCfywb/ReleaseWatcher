@@ -1,0 +1,27 @@
+<Project>
+
+  <!--
+    ReleaseWatcher 主工作空间 —— 全局构建属性
+    ============================================================
+    各项目的 TargetFramework 由各自 csproj 持有，此处不重复声明。
+
+    架构边界（见 AGENTS.md 第 1.2 节、DECISIONS.md D-003 / D-019）：
+
+      App ──────→ Application ──→ Domain
+      App ──────→ Infrastructure ──→ Application, Domain
+      LocalizationGenerator ──(单向，不被引用)──→ ReleaseWatcher
+
+    App 对 Infrastructure 的引用**仅用于 DI 组合根**（AppServices 注册具体实现）。
+    业务代码（View / ViewModel / 用例）不得直接 using Infrastructure 的命名空间。
+    依据：DECISIONS.md D-037。
+  -->
+
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
+  </PropertyGroup>
+
+</Project>
