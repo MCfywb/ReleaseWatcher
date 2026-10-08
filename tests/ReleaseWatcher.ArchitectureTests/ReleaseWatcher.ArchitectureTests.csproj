@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ReleaseWatcher 架构测试项目
+    ============================================================
+    职责：把 AGENTS.md / DECISIONS.md 中的分层约束自动化，防止后续维护中被无意破坏。
+
+    注意：本项目**故意不 ProjectReference** 任何主项目，原因见 SolutionLayout.cs：
+      1. 检查对象就是各项目的 .csproj 本身，引用它们会造成自我循环；
+      2. 保持 net10.0 跨平台，未来可在非 Windows CI 代理上执行；
+      3. 与 D-019「物理独立、逻辑关联」的思路一致。
+
+    覆盖的约束：
+      LayeringTests              分层依赖方向（D-003、D-037、D-019）
+      CompositionRootTests       业务代码不得直接依赖 Infrastructure（D-037）
+      RepositoryConventionTests  构建脚本与版本控制约定（D-038、D-039、R-012、R-013）
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>ReleaseWatcher.ArchitectureTests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

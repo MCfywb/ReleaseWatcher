@@ -5,4 +5,7 @@
     <Project Path="src/ReleaseWatcher.Domain/ReleaseWatcher.Domain.csproj" />
     <Project Path="src/ReleaseWatcher.Infrastructure/ReleaseWatcher.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ReleaseWatcher.ArchitectureTests/ReleaseWatcher.ArchitectureTests.csproj" />
+  </Folder>
 </Solution>

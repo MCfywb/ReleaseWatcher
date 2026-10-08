@@ -1,0 +1,92 @@
+namespace ReleaseWatcher.ArchitectureTests;
+
+/// <summary>
+/// 定位解决方案根目录，供架构检查读取工程文件。
+/// </summary>
+/// <remarks>
+/// 本测试项目**故意不 ProjectReference** 主解决方案的任何项目，原因有三：
+///
+/// <list type="number">
+/// <item>架构检查的对象就是各项目的 <c>.csproj</c> 本身；
+/// 若引用它们，检查逻辑会自我循环。</item>
+/// <item>避免把 App（WPF，net10.0-windows）与全部依赖拖进测试进程 —— 测试项目
+/// 应保持 <c>net10.0</c> 跨平台可用，未来可在 CI 的非 Windows 代理上执行。</item>
+/// <item>与 D-019 确立的"物理独立、逻辑单向关联"思路一致：
+/// 检查者不侵入被检查者。</item>
+/// </list>
+///
+/// 依据：<c>DECISIONS.md</c> D-019 / D-037、<c>RISKS.md</c> R-007。
+/// </remarks>
+public static class SolutionLayout
+{
+    /// <summary>主解决方案文件相对文件名。</summary>
+    public const string SolutionFileName = "ReleaseWatcher.slnx";
+
+    /// <summary>四个主项目的目录名，顺序即分层顺序。</summary>
+    public static readonly string[] LayerProjects =
+    [
+        "ReleaseWatcher.Domain",
+        "ReleaseWatcher.Application",
+        "ReleaseWatcher.Infrastructure",
+        "ReleaseWatcher.App",
+    ];
+
+    /// <summary>
+    /// 由当前测试程序集位置向上查找 <c>ReleaseWatcher.slnx</c>，
+    /// 返回解决方案根目录。
+    /// </summary>
+    /// <exception cref="DirectoryNotFoundException">
+    /// 向上若干级仍未找到解决方案文件 —— 通常意味着测试被从错误位置运行。
+    /// </exception>
+    public static string SolutionRoot { get; } = FindSolutionRoot();
+
+    /// <summary>
+    /// 某个项目的工程文件绝对路径。
+    /// </summary>
+    /// <param name="directoryName">
+    /// 项目目录名，例如 <c>ReleaseWatcher.Domain</c>；
+    /// 也可传入测试项目名 <c>ReleaseWatcher.ArchitectureTests</c>，此时自动在
+    /// <c>src/</c> 与 <c>tests/</c> 下查找。
+    /// </param>
+    public static string ProjectFile(string directoryName)
+    {
+        // 多数项目在 src/，测试项目在 tests/ —— 允许调用方不必关心这个区别。
+        var srcCandidate = Path.Combine(SolutionRoot, "src", directoryName, $"{directoryName}.csproj");
+        if (File.Exists(srcCandidate))
+        {
+            return srcCandidate;
+        }
+
+        var testsCandidate = Path.Combine(SolutionRoot, "tests", directoryName, $"{directoryName}.csproj");
+        if (File.Exists(testsCandidate))
+        {
+            return testsCandidate;
+        }
+
+        throw new FileNotFoundException(
+            $"未找到项目 {directoryName} 的工程文件（已查找 src/ 与 tests/ 目录）。",
+            srcCandidate);
+    }
+
+    /// <summary>读取某项目的工程文件内容。</summary>
+    public static string ReadProjectFile(string directoryName)
+        => File.ReadAllText(ProjectFile(directoryName));
+
+    private static string FindSolutionRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, SolutionFileName)))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new DirectoryNotFoundException(
+            $"未能从 {AppContext.BaseDirectory} 向上找到 {SolutionFileName}。");
+    }
+}
