@@ -240,7 +240,7 @@
                            Text="圆角" />
 
                 <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
-                    <Border Width="120" Height="56" Margin="{StaticResource Space.Margin.Right.S}"
+                    <Border Width="120" Height="56" Margin="{StaticResource Space.Margin.Right.M}"
                             Background="{DynamicResource Brush.Surface}"
                             BorderBrush="{DynamicResource Brush.Border}"
                             BorderThickness="1"
@@ -248,7 +248,7 @@
                         <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
                                    Style="{StaticResource Text.Caption}" Text="Card 12" />
                     </Border>
-                    <Border Width="120" Height="56" Margin="{StaticResource Space.Margin.Right.S}"
+                    <Border Width="120" Height="56" Margin="{StaticResource Space.Margin.Right.M}"
                             Background="{DynamicResource Brush.Surface}"
                             BorderBrush="{DynamicResource Brush.Border}"
                             BorderThickness="1"
