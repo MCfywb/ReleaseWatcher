@@ -1,50 +1,31 @@
-﻿using System.Collections.ObjectModel;
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using ReleaseWatcher.App.Services;
 using ReleaseWatcher.Application.Abstractions;
 
 namespace ReleaseWatcher.App.Views;
 
 /// <summary>
-/// 主窗口。
+/// 应用主页。
 /// </summary>
 /// <remarks>
 /// <para>
-/// Phase 1 当前承载**设计系统预览页**：把 Theme 中的色板、字阶、控件
-/// 三态摆在屏幕上供肉眼核对。见 XAML 内注释。
+/// 2026-10-09 起本窗承载应用主界面；原设计系统预览内容已整体迁至
+/// <see cref="DesignSystemWindow"/>（独立窗口，由 Toolbar 的「设计系统」按钮打开）。
 /// </para>
 /// <para>
-/// **约束：不要在此类中 <c>using ReleaseWatcher.Infrastructure.*</c>。**
+/// <b>当前状态：骨架已就位，内容待接。</b>
+/// 应用层检测用例（<c>ReleaseDetectionService</c>）已实现，
+/// 但界面尚未绑定任何数据 —— 本次刻意不做 UI，只把结构立起来。
+/// </para>
+/// <para>
+/// <b>约束：不要在此类中 <c>using ReleaseWatcher.Infrastructure.*</c>。</b>
 /// 需要路径等信息时注入 <c>IAppPaths</c>。
 /// 该约束由 <c>CompositionRootTests</c> 自动守护（D-037）。
 /// </para>
 /// </remarks>
 public partial class MainWindow : Window
 {
-    /// <summary>
-    /// 预览页要展示的语义色清单。
-    /// </summary>
-    /// <remarks>
-    /// 由 <see cref="ThemeManager"/> 逐个解析，**不在此处写死颜色值** ——
-    /// 若某个键解析不到，页面上会出现"取不到色"的缺口，
-    /// 这正是需要被看见的问题。
-    /// </remarks>
-    private static readonly string[] SemanticBrushKeys =
-    [
-        "Brush.Background.Primary",
-        "Brush.Background.Secondary",
-        "Brush.Surface",
-        "Brush.Text.Primary",
-        "Brush.Text.Secondary",
-        "Brush.Border",
-        "Brush.Accent",
-        "Brush.Success",
-        "Brush.Warning",
-        "Brush.Error",
-    ];
-
     /// <summary>
     /// 路径提供者。用于取 <c>config.json</c> 路径以持久化主题选择。
     /// </summary>
@@ -54,6 +35,15 @@ public partial class MainWindow : Window
     /// 需要在构造之后很久才拿到它。
     /// </remarks>
     private readonly IAppPaths _paths;
+
+    /// <summary>
+    /// 设计系统窗口的当前实例。
+    /// </summary>
+    /// <remarks>
+    /// 持有引用是为了避免重复点击按钮时开出多个窗口。
+    /// 窗口关闭后置 <c>null</c>，下次点击才重新创建。
+    /// </remarks>
+    private DesignSystemWindow? _designSystemWindow;
 
     public MainWindow(IAppPaths paths)
     {
@@ -74,14 +64,39 @@ public partial class MainWindow : Window
         MinHeight = ThemeMetrics.WindowMinHeight;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
-        BuildColorSamples();
-
         // 让下拉框反映当前实际主题，而不是硬编码第 0 项。
         //
         // App.xaml.cs 在创建窗口前已应用 ResolveInitialTheme(paths.ConfigFile)，
         // 此处若固定 SelectedIndex=0，显示就会与实际配色不符
         // （系统为深色时下拉框却显示"浅色"）。
         SelectThemeItem(ThemeManager.Current);
+    }
+
+    /// <summary>
+    /// 打开设计系统手册窗口。
+    /// </summary>
+    /// <remarks>
+    /// 用 <see cref="Show()"/> 而非 <see cref="ShowDialog()"/>：
+    /// 手册需要与主页并排对照，模态对话框会挡住另一边。
+    /// 单例复用已存在的实例，避免反复点击开出一堆窗口。
+    /// </remarks>
+    private void OpenDesignSystem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_designSystemWindow is not null)
+        {
+            // 已开则前置，不重复创建
+            if (_designSystemWindow.IsVisible)
+            {
+                _designSystemWindow.Activate();
+                return;
+            }
+        }
+
+        _designSystemWindow = new DesignSystemWindow(_paths);
+        _designSystemWindow.Closed += (_, _) => _designSystemWindow = null;
+
+        _designSystemWindow.Show();
+        _designSystemWindow.Activate();
     }
 
     /// <summary>
@@ -131,72 +146,12 @@ public partial class MainWindow : Window
     private bool _suppressThemePersist;
 
     /// <summary>
-    /// 逐个解析语义色并生成色板。
+    /// 主题切换：立即应用并持久化。
     /// </summary>
     /// <remarks>
-    /// 解析失败时画一个红色描边的"未定义"块，而不是静默跳过 ——
-    /// 缺色是设计系统的真实缺陷，静默失败会让人误以为色板已完整。
+    /// 切换主题会让所有 <c>DynamicResource</c> 重新求值，
+    /// 因此界面各处颜色自动跟随，无需手动刷新任何控件。
     /// </remarks>
-    private void BuildColorSamples()
-    {
-        ColorSamples.Items.Clear();
-
-        var panel = new WrapPanel();
-
-        foreach (var key in SemanticBrushKeys)
-        {
-            panel.Children.Add(CreateSwatch(key));
-        }
-
-        ColorSamples.Items.Add(panel);
-    }
-
-    /// <summary>
-    /// 生成一个色板卡片：色块 + 键名 + 十六进制值。
-    /// </summary>
-    private static Border CreateSwatch(string key)
-    {
-        var brush = ThemeManager.ResolveBrush(key);
-
-        if (brush is SolidColorBrush solid)
-        {
-            return new Border
-            {
-                Width = 168,
-                Margin = new Thickness(0, 0, 8, 8),
-                Padding = new Thickness(8),
-                Background = solid,
-                CornerRadius = new CornerRadius(6),
-                ToolTip = $"{key} = {solid.Color}",
-                Child = new TextBlock
-                {
-                    Text = $"{key}\n{solid.Color}",
-                    Foreground = ThemeManager.ResolveBrush("Brush.Text.Primary"),
-                    FontSize = 11,
-                    TextWrapping = TextWrapping.Wrap,
-                },
-            };
-        }
-
-        return new Border
-        {
-            Width = 168,
-            Margin = new Thickness(0, 0, 8, 8),
-            Padding = new Thickness(8),
-            Background = new SolidColorBrush(Colors.Transparent),
-            BorderBrush = ThemeManager.ResolveBrush("Brush.Error"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Child = new TextBlock
-            {
-                Text = $"{key} — 未定义",
-                Foreground = ThemeManager.ResolveBrush("Brush.Error"),
-                FontSize = 11,
-                TextWrapping = TextWrapping.Wrap,
-            },
-        };
-    }
-
     private void ThemeSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (ThemeSelector.SelectedItem is ComboBoxItem item
@@ -213,8 +168,6 @@ public partial class MainWindow : Window
             {
                 ThemeManager.TrySaveTheme(_paths.ConfigFile, theme);
             }
-
-            BuildColorSamples();
         }
     }
 }
