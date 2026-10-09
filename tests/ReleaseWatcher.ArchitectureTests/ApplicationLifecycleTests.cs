@@ -142,6 +142,55 @@ public sealed class ApplicationLifecycleTests
     }
 
     [Fact]
+    public void DesignSystemWindow_MustExistAsSeparateWindow()
+    {
+        // 2026-10-09 决策：设计系统从 MainWindow 迁到独立窗口。
+        //
+        // 原因：调色板与业务布局混在一处时，每次改色都要在业务结构里
+        // 辨认"是设计问题还是布局问题"；两者互不干扰才能各自快速迭代。
+        // 同时保留可看的核对页面 —— D-048 要求视觉产出交用户验收，
+        // 没有页面可看就无法验收。
+        var designSystemXaml = AppSource(Path.Combine("Views", "DesignSystemWindow.xaml"));
+
+        Assert.True(File.Exists(designSystemXaml), "未找到 DesignSystemWindow.xaml");
+        Assert.Contains("ReleaseWatcher.App.Views.DesignSystemWindow", File.ReadAllText(designSystemXaml));
+
+        // 预览页内容必须真的搬过去了，不能是新建一个空窗口
+        var content = File.ReadAllText(designSystemXaml);
+        Assert.Contains("语义色", content);
+        Assert.Contains("ColorSamples", content);
+    }
+
+    [Fact]
+    public void MainWindow_MustOfferEntryToDesignSystemWindow()
+    {
+        // 独立窗口若没有入口就等于藏起来了 —— 用户无从打开。
+        var windowCode = ReadAppSource(Path.Combine("Views", "MainWindow.xaml.cs"));
+        var windowXaml = ReadAppSource(Path.Combine("Views", "MainWindow.xaml"));
+
+        Assert.Contains("OpenDesignSystem_Click", windowCode, StringComparison.Ordinal);
+        Assert.Contains("DesignSystem", windowXaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DesignSystemWindow_MustNotDuplicateThemeMetricsClass()
+    {
+        // ThemeMetrics 曾随文件复制被复制一份，两个文件同程序集内重复定义
+        // 同类型会编译冲突（CS0101）。故只允许在 MainWindow.xaml.cs 中定义一次。
+        var designSystemCode = ReadAppSource(Path.Combine("Views", "DesignSystemWindow.xaml.cs"));
+
+        var offenders = designSystemCode
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line =>
+                !line.StartsWith("//", StringComparison.Ordinal)
+                && line.Contains("class ThemeMetrics", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
     public void ThemeSelector_MustPersistUserSelectionOnChange()
     {
         // 只有 Apply 而不落盘 = 持久化写了却永远存不进值，重启后仍丢失。
