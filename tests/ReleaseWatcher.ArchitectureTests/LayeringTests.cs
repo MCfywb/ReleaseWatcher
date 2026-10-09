@@ -162,6 +162,11 @@ public sealed class LayeringTests
         [
             "ReleaseWatcher.Domain",
         ],
+        ["ReleaseWatcher.Application.Tests"] =
+        [
+            "ReleaseWatcher.Application",
+            "ReleaseWatcher.Domain",
+        ],
     };
 
     public static TheoryData<string> UnitTestProjects =>

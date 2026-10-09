@@ -62,8 +62,9 @@ public static class SolutionLayout
     public static readonly string[] TestProjects =
     [
         "ReleaseWatcher.ArchitectureTests",
-        "ReleaseWatcher.Infrastructure.Tests",
+        "ReleaseWatcher.Application.Tests",
         "ReleaseWatcher.Domain.Tests",
+        "ReleaseWatcher.Infrastructure.Tests",
     ];
 
     /// <summary>
