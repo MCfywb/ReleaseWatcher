@@ -1,0 +1,33 @@
+<!--
+    Theme.xaml —— 设计系统合并入口
+
+    App.xaml 只引用这一个文件；新增设计系统字典时只改这里，
+    不必改动 App.xaml 或任何控件。
+
+    合并顺序有讲究：
+
+        颜色在最前 → 依赖颜色的控件样式在后。
+        WPF 的 MergedDictionaries 后加入的字典可以引用先加入的键；
+        反向引用会解析失败。因此 Colors 必须排在 Typography / Spacing /
+        Controls 之前（后者会 StaticResource 引用前者的键）。
+        Typography 与 Spacing 相互无依赖，顺序不限。
+
+    颜色字典为何放在最外层而不是 Controls 内部：
+
+        主题切换要整体替换 Colors.Dict，替换后 Controls 中的
+        DynamicResource 会自动重新求值。若 Colors 被合并进 Controls，
+        替换粒度变大，且容易出现同一键被多处定义。
+-->
+
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 默认浅色主题。ThemeManager 会在启动时按系统设置覆盖 -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/ReleaseWatcher.App;component/Resources/Theme/Colors.Light.xaml" />
+        <ResourceDictionary Source="/ReleaseWatcher.App;component/Resources/Theme/Typography.xaml" />
+        <ResourceDictionary Source="/ReleaseWatcher.App;component/Resources/Theme/Spacing.xaml" />
+        <ResourceDictionary Source="/ReleaseWatcher.App;component/Resources/Theme/Controls.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+</ResourceDictionary>

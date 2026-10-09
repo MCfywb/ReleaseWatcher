@@ -1,0 +1,595 @@
+<!--
+    Controls.xaml —— 基础控件样式（Button / TextBox / ComboBox / CheckBox / ScrollBar）
+
+    依据：docs/reference/development-plan-ui.md
+          第六节（颜色语义）、第七节（少阴影 / 少边框 / 轻圆角 / 大量留白）
+
+    总体取向："轻、静、清晰"
+
+        · 少阴影  —— 几乎不用 DropShadowEffect，仅浮层（Popup / ToolTip）保留系统默认
+        · 少边框  —— 仅 1px Brush.Border，聚焦时才转为 Accent
+        · 轻圆角  —— Button / Input 8，Badge 6，Card 12（见 Spacing.xaml）
+        · 大量留白 —— 内边距取 8px 体系
+
+    为什么全部用 DynamicResource 取色：
+
+        主题切换时 StaticResource 不会重新求值，颜色会留在浅色值上（D-045）。
+
+    已覆盖控件：Button、TextBox、ComboBox、CheckBox、ScrollBar。
+    未覆盖（等真正用到时再写，避免提前投入）：
+        ContextMenu、ToolTip、ProgressBar、ScrollViewer、Separator、TabControl
+-->
+
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        合并 Spacing.xaml —— 这一步不可省。
+
+        原因：ControlTemplate 内的 StaticResource 查找遵循特殊顺序
+        （模板自身资源 → TemplatedParent → Application.Resources），
+        且 ControlTemplate 在样式被应用**之前**就要解析。
+        若 Controls.xaml 自身作用域内没有 Radius.* / Size.*，
+        模板解析时会抛 "无法找到名为 Radius.Button 的资源"，
+        **且编译期完全正常** —— 只有运行到该控件才炸。
+
+        在此合并后，Spacing 的键进入本字典作用域，
+        模板内的 StaticResource 才能解析到。
+        重复合并是WPF 的标准做法：同一个字典可被多处引用，
+        键不会重复定义，也不会产生冲突。
+    -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/ReleaseWatcher.App;component/Resources/Theme/Spacing.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+    <!-- ============================================================
+         共用状态画刷
+         ============================================================ -->
+
+    <!-- 控件底色与边框直接复用全局语义画刷，无需再包一层：
+         Colors.Light / Colors.Dark 已定义同名键，主题切换时
+         Controls.xaml 不必改动。 -->
+
+    <!-- ============================================================
+         Button
+         ============================================================ -->
+
+    <Style x:Key="Button.Base" TargetType="Button">
+        <Setter Property="FontFamily" Value="{StaticResource Font.UI}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource Radius.Button}"
+                            SnapsToDevicePixels="True">
+                        <!--
+                            居中而非左对齐：按钮文字按内容宽度居中是桌面惯例。
+                            Padding 已含左右 16，与圆角配合留出呼吸空间。
+                        -->
+                        <ContentPresenter x:Name="ContentSite"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"
+                                          RecognizesAccessKey="True" />
+                    </Border>
+
+                    <!-- 状态触发器放在模板内：换模板时状态样式随之带走，不易漏改 -->
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource Brush.Surface.Hover}" />
+                        </Trigger>
+
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource Brush.Surface.Pressed}" />
+                        </Trigger>
+
+                        <!-- 禁用：降低不透明度而非换色，避免与 hover 态混淆 -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.4" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+
+                        <!-- 默认按钮（回车触发）不额外画框，避免破坏"少边框"基调 -->
+                        <Trigger Property="IsDefault" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush"
+                                    Value="{DynamicResource Brush.Accent}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 次要按钮：默认外观（白底 + 1px 边框） -->
+    <Style x:Key="Button.Secondary" TargetType="Button" BasedOn="{StaticResource Button.Base}" />
+
+    <!--
+        主要按钮：Accent 实心 + 反色文字。一屏只用少数几个作为视觉锚点。
+
+        必须自带模板而不能BasedOn Button.Base：
+        Base 的 hover 是"叠加半透明黑"，压在 Accent 上会显脏。
+        这里改用"更亮的 Accent"表达 hover，与其他按钮的叠加策略不同。
+    -->
+    <Style x:Key="Button.Primary" TargetType="Button">
+        <Setter Property="FontFamily" Value="{StaticResource Font.UI}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <!-- 反色文字：Accent 底色上的对比色 -->
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.OnAccent}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Accent}" />
+        <!-- 实心按钮不需要描边 -->
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{StaticResource Radius.Button}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"
+                                          RecognizesAccessKey="True" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource Brush.Accent.Hover}" />
+                        </Trigger>
+                        <!--
+                            Primary 上没有按下态变体：叠加半透明黑会显脏，
+                            而 Base 的 Accent.Hover 已覆盖"有反馈"这一需求，
+                            再加一层反而变灰。若确实需要，
+                            应新增一个更深的 AccentPressed 语义色而非叠加。
+                        -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.4" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 隐式样式：默认外观为次要按钮 -->
+    <Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}" />
+
+    <!-- ============================================================
+         TextBox
+         ============================================================ -->
+
+    <Style x:Key="TextBox.Base" TargetType="TextBox">
+        <Setter Property="FontFamily" Value="{StaticResource Font.UI}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <!-- 聚焦前用低对比描边，聚焦时转Accent：既满足可聚焦提示，又不喧宾夺主 -->
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource Radius.Input}"
+                            SnapsToDevicePixels="True">
+                        <!--
+                            ScrollViewer 包裹内容：TextBox 内容超长时需要可滚动，
+                            直接放 ContentPresenter 会失去滚动能力。
+                        -->
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Margin="{TemplateBinding Padding}"
+                                      Focusable="False"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Hidden" />
+                    </Border>
+
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush"
+                                    Value="{DynamicResource Brush.Text.Secondary}" />
+                        </Trigger>
+
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush"
+                                    Value="{DynamicResource Brush.Accent}" />
+                            <Setter TargetName="Bd" Property="BorderThickness" Value="1.5" />
+                        </Trigger>
+
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.4" />
+                        </Trigger>
+
+                        <!-- 只读态不套用禁用透明度：可读内容应保持清晰 -->
+                        <Trigger Property="IsReadOnly" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource Brush.Background.Secondary}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="TextBox" BasedOn="{StaticResource TextBox.Base}" />
+
+    <!-- ============================================================
+         CheckBox
+         ============================================================ -->
+
+    <Style x:Key="CheckBox.Base" TargetType="CheckBox">
+        <Setter Property="FontFamily" Value="{StaticResource Font.UI}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="MinHeight" Value="24" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <!-- Horizontal 组合：勾选框 + 文字。勾选框不随文字长度漂移 -->
+                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                        <!-- 18px 接近 Apple HIG 的复选框尺寸 -->
+                        <Border x:Name="Box"
+                                Width="18" Height="18"
+                                VerticalAlignment="Center"
+                                Background="{DynamicResource Brush.Surface}"
+                                BorderBrush="{DynamicResource Brush.Border}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource Radius.Small}"
+                                SnapsToDevicePixels="True">
+                            <Path x:Name="CheckMark"
+                                  Width="11" Height="8"
+                                  Stretch="Uniform"
+                                  Visibility="Collapsed"
+                                  Stroke="{DynamicResource Brush.Text.OnAccent}"
+                                  StrokeThickness="2"
+                                  StrokeEndLineCap="Round"
+                                  StrokeStartLineCap="Round"
+                                  Data="M1,4 L4,7 L10,1" />
+                        </Border>
+
+                        <ContentPresenter x:Name="ContentSite"
+                                          Margin="8,0,0,0"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          RecognizesAccessKey="True" />
+                    </StackPanel>
+
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Box" Property="Background"
+                                    Value="{DynamicResource Brush.Accent}" />
+                            <Setter TargetName="Box" Property="BorderBrush"
+                                    Value="{DynamicResource Brush.Accent}" />
+                            <Setter TargetName="CheckMark" Property="Visibility" Value="Visible" />
+                        </Trigger>
+
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Box" Property="BorderBrush"
+                                    Value="{DynamicResource Brush.Accent}" />
+                        </Trigger>
+
+                        <!-- 未选中时hover 填一层浅底，给出"可点"的反馈 -->
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsChecked" Value="False" />
+                                <Condition Property="IsMouseOver" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="Box" Property="Background"
+                                    Value="{DynamicResource Brush.Surface.Hover}" />
+                        </MultiTrigger>
+
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="CheckBox" BasedOn="{StaticResource CheckBox.Base}" />
+
+    <!-- ============================================================
+         ComboBox
+         ============================================================ -->
+
+    <Style x:Key="ComboBox.Toggle" TargetType="ToggleButton">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <!-- 无边框：外框由 ComboBox 的模板提供，此处只画箭头 -->
+                    <Path x:Name="Arrow"
+                          Width="10" Height="6"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Center"
+                          Stretch="Uniform"
+                          Fill="{DynamicResource Brush.Text.Secondary}"
+                          Data="M0,0 L5,5 L10,0 Z" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Arrow" Property="Fill"
+                                    Value="{DynamicResource Brush.Text.Primary}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="ComboBox.Base" TargetType="ComboBox">
+        <Setter Property="FontFamily" Value="{StaticResource Font.UI}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{StaticResource Radius.Input}"
+                                SnapsToDevicePixels="True" />
+
+                        <!-- ToggleButton 覆盖整个外框，扩大点击区域 -->
+                        <ToggleButton x:Name="PART_Toggle"
+                                      Grid.Column="0"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      Focusable="False"
+                                      Style="{StaticResource ComboBox.Toggle}"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" />
+
+                        <ContentPresenter x:Name="ContentSite"
+                                          Margin="12,0,32,0"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          IsHitTestVisible="False"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+
+                        <!--
+                            WPF 的 ComboBox 没有 PlaceholderText 属性（那是 WinUI 的）。
+                            需要占位文字时应放一个覆盖的 TextBlock，
+                            由 SelectedIndex == -1 决定是否显示。
+                            当前 Settings 页尚未实现，暂不内置占位逻辑。
+                        -->
+
+                        <Popup x:Name="PART_Popup"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               Placement="Bottom"
+                               PopupAnimation="Fade">
+                            <Border Margin="0,4,0,0"
+                                    MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                    MaxHeight="320"
+                                    Background="{DynamicResource Brush.Surface}"
+                                    BorderBrush="{DynamicResource Brush.Border}"
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource Radius.Input}"
+                                    SnapsToDevicePixels="True">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ItemsPresenter Margin="4" />
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush"
+                                    Value="{DynamicResource Brush.Text.Secondary}" />
+                        </Trigger>
+
+                        <Trigger Property="IsDropDownOpen" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush"
+                                    Value="{DynamicResource Brush.Accent}" />
+                        </Trigger>
+
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.4" />
+                        </Trigger>
+
+                        <Trigger Property="IsEditable" Value="True">
+                            <Setter TargetName="ContentSite" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ComboBox" BasedOn="{StaticResource ComboBox.Base}" />
+
+    <Style x:Key="ComboBoxItem.Base" TargetType="ComboBoxItem">
+        <Setter Property="FontFamily" Value="{StaticResource Font.UI}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="Padding" Value="8" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Bd"
+                            Padding="{TemplateBinding Padding}"
+                            Background="Transparent"
+                            CornerRadius="{StaticResource Radius.Small}">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource Brush.Surface.Hover}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background"
+                                    Value="{DynamicResource Brush.Surface.Selected}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource ComboBoxItem.Base}" />
+
+    <!-- ============================================================
+         ScrollBar
+         WPF 默认滚动条较宽且带明显按钮，与"轻、静"基调不符。
+         这里改为细条：默认 10px，悬停 12px，无箭头按钮。
+         ============================================================ -->
+
+    <Style x:Key="ScrollBar.Thumb" TargetType="Thumb">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <!-- 圆角 = 半径时呈胶囊，细条下即"圆润"的滚动条 -->
+                    <Border x:Name="Bd"
+                            Background="{DynamicResource Brush.Text.Secondary}"
+                            CornerRadius="5"
+                            Opacity="0.5" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.8" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.9" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="ScrollBar.Line" TargetType="RepeatButton">
+        <!-- 隐藏箭头按钮：滚动条不占额外空间 -->
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="IsTabStop" Value="False" />
+    </Style>
+
+    <!--
+        轨道空白页模板：全透明，什么都不画。
+        保留 Track 的 Decrease/IncreaseRepeatButton 是为了维持结构完整
+        （缺了会导致轨道布局异常），但点击不产生翻页行为。
+    -->
+    <ControlTemplate x:Key="ScrollBar.PageTemplate" TargetType="RepeatButton">
+        <Border Background="Transparent" />
+    </ControlTemplate>
+
+    <!--
+        轨道空白页（PageControl）：保留但**不可点**，点空白处不翻页
+        —— macOS 风格滚动条只拖滑块。
+
+        未写成具名Style：PageControl 位于 Primitives 命名空间，
+        用Style TargetType 前缀在 XAML 里解析不便（MC3050），
+        且本样式只有"透明 + 不响应"这一个用途，内联更直接。
+    -->
+
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Width" Value="10" />
+        <Setter Property="MinWidth" Value="10" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Grid Background="Transparent">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageUpCommand"
+                                              Focusable="False"
+                                              IsTabStop="False"
+                                              Template="{StaticResource ScrollBar.PageTemplate}" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource ScrollBar.Thumb}" />
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageDownCommand"
+                                              Focusable="False"
+                                              IsTabStop="False"
+                                              Template="{StaticResource ScrollBar.PageTemplate}" />
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto" />
+                <Setter Property="Height" Value="10" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid Background="Transparent">
+                                <Track x:Name="PART_Track" IsDirectionReversed="False">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageLeftCommand"
+                                                      Focusable="False"
+                                                      IsTabStop="False"
+                                                      Template="{StaticResource ScrollBar.PageTemplate}" />
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Style="{StaticResource ScrollBar.Thumb}" />
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageRightCommand"
+                                                      Focusable="False"
+                                                      IsTabStop="False"
+                                                      Template="{StaticResource ScrollBar.PageTemplate}" />
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+</ResourceDictionary>

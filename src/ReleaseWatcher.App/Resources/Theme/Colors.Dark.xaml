@@ -1,0 +1,48 @@
+<!--
+    Colors.Dark.xaml —— 深色主题的语义色
+
+    键名与 Colors.Light.xaml **完全一致**，主题切换即整体替换。
+
+    说明：原方案只定义了浅色主题，深色系本轮按 Apple HIG 夜间模式
+    惯例补齐，属已确认的设计决定。
+
+    与浅色版的三处有意差异：
+
+      1. 叠加层改用半透明**白**。黑上加黑看不出 hover 变化。
+      2. 状态色整体提亮（如 Error #D9342B → #FF453A），
+         否则在深底上对比度不足。
+      3. Surface 与 Background.Secondary 同为 #2C2C2E，
+         依靠 1px 描边而非色差区分层级 —— 深底上色差难以分辨。
+-->
+
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 背景层 -->
+    <SolidColorBrush x:Key="Brush.Background.Primary" Color="#1C1C1E" />
+    <SolidColorBrush x:Key="Brush.Background.Secondary" Color="#2C2C2E" />
+
+    <SolidColorBrush x:Key="Brush.Surface" Color="#2C2C2E" />
+
+    <!-- 叠加层用半透明白，理由见文件头 -->
+    <SolidColorBrush x:Key="Brush.Surface.Hover" Color="#FFFFFF" Opacity="0.06" />
+    <SolidColorBrush x:Key="Brush.Surface.Selected" Color="#FFFFFF" Opacity="0.10" />
+    <SolidColorBrush x:Key="Brush.Surface.Pressed" Color="#FFFFFF" Opacity="0.14" />
+
+    <!-- 文字 -->
+    <SolidColorBrush x:Key="Brush.Text.Primary" Color="#F5F5F7" />
+    <SolidColorBrush x:Key="Brush.Text.Secondary" Color="#98989F" />
+    <SolidColorBrush x:Key="Brush.Text.OnAccent" Color="#FFFFFF" />
+
+    <!-- 描边 -->
+    <SolidColorBrush x:Key="Brush.Border" Color="#3A3A3C" />
+    <SolidColorBrush x:Key="Brush.Border.Subtle" Color="#2F2F31" />
+
+    <!-- 强调色与状态色（提亮） -->
+    <SolidColorBrush x:Key="Brush.Accent" Color="#0A84FF" />
+    <SolidColorBrush x:Key="Brush.Accent.Hover" Color="#3A9BFF" />
+    <SolidColorBrush x:Key="Brush.Success" Color="#32D74B" />
+    <SolidColorBrush x:Key="Brush.Warning" Color="#FF9F0A" />
+    <SolidColorBrush x:Key="Brush.Error" Color="#FF453A" />
+
+</ResourceDictionary>

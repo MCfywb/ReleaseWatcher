@@ -18,5 +18,15 @@
         Application.Current.Shutdown() 退出。
     -->
     <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!--
+                    设计系统（D-046）。这里只引用合并入口 Theme.xaml，
+                    后续新增设计系统字典只改Theme.xaml 一处，
+                    不必再动 App.xaml。
+                -->
+                <ResourceDictionary Source="/ReleaseWatcher.App;component/Resources/Theme/Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
