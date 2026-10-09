@@ -356,18 +356,38 @@
          ComboBox
          ============================================================ -->
 
+    <!--
+        ComboBox 的触发区（点击展开下拉）。
+
+        必须有一个**铺满整个控件**的透明 Border 承载命中测试：
+        若模板里只有 Path（箭头图形），只有那10×6 的像素区域可命中，
+        点控件其余位置毫无反应 —— 表现为"下拉框拉不开"。
+        Panel 本身不接收命中测试，Border 才是承载元素。
+
+        Border 设Background="Transparent" 而非留空：
+        透明画刷仍参与命中测试，完全不设Background 则不参与。
+    -->
     <Style x:Key="ComboBox.Toggle" TargetType="ToggleButton">
+        <Setter Property="Focusable" Value="False" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
-                    <!-- 无边框：外框由 ComboBox 的模板提供，此处只画箭头 -->
-                    <Path x:Name="Arrow"
-                          Width="10" Height="6"
-                          HorizontalAlignment="Right"
-                          VerticalAlignment="Center"
-                          Stretch="Uniform"
-                          Fill="{DynamicResource Brush.Text.Secondary}"
-                          Data="M0,0 L5,5 L10,0 Z" />
+                    <Border Background="Transparent"
+                            SnapsToDevicePixels="True">
+                        <!--
+                            箭头靠右，与外框留出 Space.S 的间隙。
+                            几何按 10×6 定义，配 Stretch="Fill" 才能正确呈现；
+                            原先误写 Stretch="Uniform"，会等比缩放到 Border 尺寸而变形。
+                        -->
+                        <Path x:Name="Arrow"
+                              Width="10" Height="6"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Center"
+                              Margin="{DynamicResource Space.Padding.Horizontal.S}"
+                              Stretch="Fill"
+                              Fill="{DynamicResource Brush.Text.Secondary}"
+                              Data="M0,0 L5,6 L10,0 Z" />
+                    </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Arrow" Property="Fill"

@@ -53,6 +53,7 @@
                     <ComboBox x:Name="ThemeSelector"
                               Width="120"
                               SelectionChanged="ThemeSelector_SelectionChanged">
+                        <ComboBoxItem Content="跟随系统" Tag="System" />
                         <ComboBoxItem Content="浅色" Tag="Light" />
                         <ComboBoxItem Content="深色" Tag="Dark" />
                     </ComboBox>
@@ -239,7 +240,7 @@
                            Text="圆角" />
 
                 <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
-                    <Border Width="120" Height="56" Margin="{StaticResource Space.Padding.Horizontal.M}"
+                    <Border Width="120" Height="56" Margin="{StaticResource Space.Padding.Horizontal.S}"
                             Background="{DynamicResource Brush.Surface}"
                             BorderBrush="{DynamicResource Brush.Border}"
                             BorderThickness="1"
@@ -247,7 +248,7 @@
                         <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
                                    Style="{StaticResource Text.Caption}" Text="Card 12" />
                     </Border>
-                    <Border Width="120" Height="56" Margin="{StaticResource Space.Padding.Horizontal.M}"
+                    <Border Width="120" Height="56" Margin="{StaticResource Space.Padding.Horizontal.S}"
                             Background="{DynamicResource Brush.Surface}"
                             BorderBrush="{DynamicResource Brush.Border}"
                             BorderThickness="1"
