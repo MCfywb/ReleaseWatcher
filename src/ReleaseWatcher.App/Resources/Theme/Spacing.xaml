@@ -82,6 +82,7 @@
     -->
     <Thickness x:Key="Space.Padding.Horizontal.S">8,0</Thickness>
     <Thickness x:Key="Space.Padding.Horizontal.M">16,0</Thickness>
+    <Thickness x:Key="Space.Padding.Horizontal.L">24,0</Thickness>
     <Thickness x:Key="Space.Padding.Horizontal.XL">32,0</Thickness>
 
     <!--
@@ -136,14 +137,38 @@
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
                 x:Key="Size.WindowHeight">900</sys:Double>
 
-    <!-- ============================================================
-         控件高度
-         ============================================================ -->
+<!-- ============================================================
+     控件高度
+     ============================================================ -->
 
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
                 x:Key="Size.ControlHeight">32</sys:Double>
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
                 x:Key="Size.ControlHeightLarge">36</sys:Double>
+
+    <!--
+        间距体系的宽度版本（x:Double）。
+
+        为什么 Space.* 不够用：Space.* 是 sys:Double，直接写
+        Width="{StaticResource Space.XS}" 在模板内会抛
+        FormatException（LengthConverter 无法把资源引用解析为 Length）。
+        因此凡用于 Width / Height，需改用本组 Thickness 版本以外
+        的 x:Double 键 —— 它们语义相同，只是换个类型。
+    -->
+    <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                x:Key="Size.Space.XS">4</sys:Double>
+    <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                x:Key="Size.Space.S">8</sys:Double>
+    <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                x:Key="Size.Space.M">16</sys:Double>
+    <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                x:Key="Size.Space.L">24</sys:Double>
+    <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                x:Key="Size.Space.XL">32</sys:Double>
+    <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                x:Key="Size.Space.2XL">40</sys:Double>
+    <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                x:Key="Size.Space.3XL">48</sys:Double>
 
     <!--
         32 是取原文 Toolbar 56~64 与常见桌面控件的折中值。

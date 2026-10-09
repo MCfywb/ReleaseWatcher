@@ -116,13 +116,13 @@
 
                 <!-- ComboBox 与 CheckBox -->
                 <StackPanel Margin="{StaticResource Space.Padding.Top.M}" Orientation="Horizontal">
-                    <ComboBox Width="180" Margin="0,0,24,0">
+                    <ComboBox Width="180" Margin="{StaticResource Space.Padding.Horizontal.L}">
                         <ComboBoxItem Content="跟随系统" />
                         <ComboBoxItem Content="浅色" />
                         <ComboBoxItem Content="深色" />
                     </ComboBox>
-                    <CheckBox Margin="{StaticResource Space.Padding.Horizontal.M}" Content="已选中" IsChecked="True" />
-                    <CheckBox Margin="{StaticResource Space.Padding.Horizontal.M}" Content="未选中" />
+                    <CheckBox Margin="{StaticResource Space.Padding.Horizontal.S}" Content="已选中" IsChecked="True" />
+                    <CheckBox Margin="{StaticResource Space.Padding.Horizontal.S}" Content="未选中" />
                     <CheckBox Content="已禁用" IsEnabled="False" />
                 </StackPanel>
 
@@ -170,49 +170,49 @@
                 -->
                 <StackPanel Orientation="Horizontal">
                     <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
-                        <Border Width="{StaticResource Space.XS}" Height="24"
+                        <Border Width="{StaticResource Size.Space.XS}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="XS 4" />
                     </StackPanel>
 
                     <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
-                        <Border Width="{StaticResource Space.S}" Height="24"
+                        <Border Width="{StaticResource Size.Space.S}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="S 8" />
                     </StackPanel>
 
                     <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
-                        <Border Width="{StaticResource Space.M}" Height="24"
+                        <Border Width="{StaticResource Size.Space.M}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="M 16" />
                     </StackPanel>
 
                     <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
-                        <Border Width="{StaticResource Space.L}" Height="24"
+                        <Border Width="{StaticResource Size.Space.L}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="L 24" />
                     </StackPanel>
 
                     <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
-                        <Border Width="{StaticResource Space.XL}" Height="24"
+                        <Border Width="{StaticResource Size.Space.XL}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="XL 32" />
                     </StackPanel>
 
                     <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
-                        <Border Width="{StaticResource Space.2XL}" Height="24"
+                        <Border Width="{StaticResource Size.Space.2XL}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="2XL 40" />
                     </StackPanel>
 
                     <StackPanel>
-                        <Border Width="{StaticResource Space.3XL}" Height="24"
+                        <Border Width="{StaticResource Size.Space.3XL}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="3XL 48" />

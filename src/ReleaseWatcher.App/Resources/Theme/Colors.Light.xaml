@@ -70,7 +70,15 @@
         因此 Primary 按钮文字建议 14px Semibold —— Semibold 可按大字号处理。
     -->
     <SolidColorBrush x:Key="Brush.Accent" Color="#0A84FF" />
-    <SolidColorBrush x:Key="Brush.Accent.Hover" Color="#3A9BFF" />
+
+    <!--
+        hover 只提亮一档（#0A84FF → #3D9AFF，亮度差约 8%）。
+
+        原先的 #3A9BFF 跨度过大，鼠标进出时肉眼能看到明显的
+        亮度跳变（用户反馈"Accent 回调"）。hover 应当是**不易察觉的**
+        提示，而不是状态切换 —— 幅度大到能看见就说明过头了。
+    -->
+    <SolidColorBrush x:Key="Brush.Accent.Hover" Color="#3D9AFF" />
     <SolidColorBrush x:Key="Brush.Success" Color="#28A745" />
     <SolidColorBrush x:Key="Brush.Warning" Color="#E8862A" />
     <SolidColorBrush x:Key="Brush.Error" Color="#D9342B" />

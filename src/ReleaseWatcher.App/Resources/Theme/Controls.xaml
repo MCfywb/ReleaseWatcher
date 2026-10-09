@@ -427,22 +427,36 @@
                             当前 Settings 页尚未实现，暂不内置占位逻辑。
                         -->
 
+                        <!--
+                            Popup 内的资源解析与主视觉树**不同**：
+                            Popup 内容被放入独立的窗口树，其资源查找不会经过
+                            本字典合并进来的 Spacing.xaml，因此
+                            StaticResource 会解析失败，被当作字符串喂给
+                            ThicknessConverter，抛 FormatException。
+
+                            实测确认：把此处 StaticResource 保留即启动崩溃
+                            （"无法将 {StaticResource 字符串转换为 Length"）。
+
+                            修法：Popup 内一律改用 DynamicResource ——
+                            它会向上查找到 Application.Resources，
+                            而设计系统字典都在那里。
+                        -->
                         <Popup x:Name="PART_Popup"
                                AllowsTransparency="True"
                                Focusable="False"
                                IsOpen="{TemplateBinding IsDropDownOpen}"
                                Placement="Bottom"
                                PopupAnimation="Fade">
-                            <Border Margin="0,{StaticResource Space.XS},0,0"
+                            <Border Margin="{DynamicResource Space.Padding.Top.XS}"
                                     MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                                     MaxHeight="320"
                                     Background="{DynamicResource Brush.Surface}"
                                     BorderBrush="{DynamicResource Brush.Border}"
                                     BorderThickness="1"
-                                    CornerRadius="{StaticResource Radius.Input}"
+                                    CornerRadius="{DynamicResource Radius.Input}"
                                     SnapsToDevicePixels="True">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <ItemsPresenter Margin="{StaticResource Space.XS}" />
+                                    <ItemsPresenter Margin="{DynamicResource Space.Margin.XS}" />
                                 </ScrollViewer>
                             </Border>
                         </Popup>
