@@ -497,6 +497,9 @@ public sealed class DesignSystemTests
             Path.Combine(AppProjectRoot(), ThemeDirectory, "Controls.xaml"),
             Path.Combine(AppProjectRoot(), ThemeDirectory, "Theme.xaml"),
             Path.Combine(AppProjectRoot(), "Views", "MainWindow.xaml"),
+            // 设计系统窗口同样大量使用间距键，2026-10-09 建立时曾遗漏 ——
+            // 类型违规会在运行时抛 FormatException，编译期不报错。
+            Path.Combine(AppProjectRoot(), "Views", "DesignSystemWindow.xaml"),
         };
 
         // 匹配两类位置：

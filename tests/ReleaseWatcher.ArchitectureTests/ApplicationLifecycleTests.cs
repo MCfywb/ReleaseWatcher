@@ -162,6 +162,41 @@ public sealed class ApplicationLifecycleTests
     }
 
     [Fact]
+    public void MainWindow_MustUseWindowChromeForIntegratedTitleBar()
+    {
+        // 2026-10-09 用户决策：标题栏与窗口一体（无边框）。
+        //
+        // 实现必须是 WindowStyle=None + WindowChrome —— WindowChrome 通过
+        // 非客户区命中测试保留边缘缩放、Aero Snap、Win+方向键贴边等系统行为；
+        // 手写 MouseLeftButtonDown + DragMove 会全部失去这些能力。
+        // 若未来改用别的机制，本断言应随之更新而非简单删除。
+        var xaml = ReadAppSource(Path.Combine("Views", "MainWindow.xaml"));
+
+        Assert.Contains("WindowStyle=\"None\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("WindowChrome", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindow_ThemeSelector_MustLiveInSettingsPageNotToolbar()
+    {
+        // 2026-10-09 用户决策：主题选择放设置页，不占主页顶部。
+        // 验证方式：ThemeSelector（Tag="System" 的下拉框）必须出现在
+        // SettingsPage 区域之内、且在标题栏之后 —— 字符串位置比较。
+        var xaml = ReadAppSource(Path.Combine("Views", "MainWindow.xaml"));
+
+        var settingsPageIndex = xaml.IndexOf("x:Name=\"SettingsPage\"", StringComparison.Ordinal);
+        var themeSelectorIndex = xaml.IndexOf("x:Name=\"ThemeSelector\"", StringComparison.Ordinal);
+        var titleBarIndex = xaml.IndexOf("标题栏", StringComparison.Ordinal);
+
+        Assert.True(settingsPageIndex > 0, "MainWindow.xaml 中未找到 SettingsPage");
+        Assert.True(themeSelectorIndex > 0, "MainWindow.xaml 中未找到 ThemeSelector —— 主题设置被移除了？");
+
+        Assert.True(
+            themeSelectorIndex > settingsPageIndex,
+            "ThemeSelector 应位于 SettingsPage 区域内（主题选择属设置页，不属于主页顶部）");
+    }
+
+    [Fact]
     public void MainWindow_MustOfferEntryToDesignSystemWindow()
     {
         // 独立窗口若没有入口就等于藏起来了 —— 用户无从打开。
