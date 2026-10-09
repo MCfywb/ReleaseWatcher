@@ -544,6 +544,63 @@ public sealed class DesignSystemTests
     }
 
     /// <summary>
+    /// <c>ColumnDefinition</c> / <c>RowDefinition</c> 的 Width / Height
+    /// 不得引用 <c>sys:Double</c> 键。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>2026-10-09 真实故障：</b>曾写
+    /// <c>&lt;ColumnDefinition Width="{StaticResource Size.SidebarWidth}" /&gt;</c>
+    /// 。<c>ColumnDefinition.Width</c> 是 <c>GridLength</c>，
+    /// 而 <c>Size.SidebarWidth</c> 是 <c>sys:Double</c>，启动即抛
+    /// <c>XamlParseException: "220" 不是属性 "Width" 的有效值</c> ——
+    /// <b>表现为"exe 打不开"</b>。
+    /// </para>
+    /// <para>
+    /// 为何既有守卫没拦住：<c>ThicknessAttributes_MustNotReferenceDoubleSpacingKeys</c>
+    /// 只扫 Margin / Padding / Setter.Value，不覆盖 GridLength 属性。
+    /// 两类违规同源（类型不匹配），但扫描模式不同，故单独断言。
+    /// </para>
+    /// <para>
+    /// 修法：宽度仍在 Spacing.xaml 里保持单一来源，由代码
+    /// <c>new GridLength(ThemeMetrics.SidebarWidth)</c> 设置，不在 XAML 绑定。
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void GridDefinitionLengths_MustNotReferenceDoubleKeys()
+    {
+        var files = new[]
+        {
+            Path.Combine(AppProjectRoot(), "Views", "MainWindow.xaml"),
+            Path.Combine(AppProjectRoot(), "Views", "DesignSystemWindow.xaml"),
+        };
+
+        var pattern = new Regex(
+            @"<(?:Column|Row)Definition\b[^>]*?\b(?:Width|Height)\s*=\s*""\{StaticResource (?<key>[A-Za-z.0-9]+)\}""",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(2));
+
+        var offenders = new List<string>();
+
+        foreach (var file in files.Where(File.Exists))
+        {
+            var content = File.ReadAllText(file);
+
+            foreach (Match match in pattern.Matches(content))
+            {
+                offenders.Add($"{Path.GetFileName(file)}: {match.Value.Trim()}");
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "ColumnDefinition / RowDefinition 的 Width / Height 是 GridLength 类型，"
+            + "不可引用 sys:Double 的键（如 Size.SidebarWidth）—— 编译期不报错、"
+            + "启动即崩，表现为「exe 打不开」。应在代码里用 new GridLength(...) 设置："
+            + string.Join(" | ", offenders.Distinct().Take(5)));
+    }
+
+    /// <summary>
     /// 可点击控件的模板必须包含承载命中测试的 <c>Border</c>。
     /// </summary>
     /// <remarks>
