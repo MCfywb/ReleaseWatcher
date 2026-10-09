@@ -2,6 +2,7 @@
 using System.Windows.Controls;
 using System.Windows.Media;
 using ReleaseWatcher.App.Services;
+using ReleaseWatcher.App.ViewModels;
 using ReleaseWatcher.Application.Abstractions;
 
 namespace ReleaseWatcher.App.Views;
@@ -49,13 +50,28 @@ public partial class MainWindow : Window
     /// </remarks>
     private DesignSystemWindow? _designSystemWindow;
 
-    public MainWindow(IAppPaths paths)
+    /// <summary>概览页 ViewModel。</summary>
+    private readonly OverviewViewModel _overviewViewModel;
+
+    public MainWindow(
+        IAppPaths paths,
+        RepositoryListViewModel repositoryList,
+        OverviewViewModel overview)
     {
         ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(repositoryList);
+        ArgumentNullException.ThrowIfNull(overview);
 
         InitializeComponent();
 
         _paths = paths;
+        _overviewViewModel = overview;
+
+        // DataContext 设为概览：概览与检测列表共享同一次检测结果，
+        // 两个页面各自设DataContext 会导致它们的数据源分叉。
+        // 检测列表页通过 {Binding DataContext.RepositoryList, RelativeSource=...}
+        // 取用同一实例（见 MainWindow.xaml）。
+        DataContext = overview;
 
         // Taskbar / Alt+Tab 仍需要窗口标题；标题栏上显示的应用名由 XAML 承担。
         Title = "ReleaseWatcher";
@@ -71,7 +87,7 @@ public partial class MainWindow : Window
         // （标题栏现在只放应用名）。
         AboutPathsText.Text = paths.AppDirectory;
 
-        // 应用 Sidebar 初始状态（展开：宽度 220、内边距生效、图标靠左）。
+        // 应用 Sidebar 初始状态（展开：宽度按设计系统、图标靠左）。
         // 注意宽度不能在 XAML 绑定：ColumnDefinition.Width 是 GridLength，
         // 而 Size.SidebarWidth 是 sys:Double，绑定会在启动时抛 XamlParseException。
         ApplySidebarState();
@@ -86,8 +102,14 @@ public partial class MainWindow : Window
         // 此处若固定 SelectedIndex=0，显示就会与实际配色不符。
         SelectThemeItem(ThemeManager.Current);
 
-        // 最大化 / 还原时更新标题栏按钮图标（E922 最大化 / E923 还原）。
+        // 最大化 / 还原时更新标题栏按钮图标（最大化方框 ↔ 还原双框，均为矢量图形）。
         StateChanged += (_, _) => UpdateMaximizeIcon();
+
+        // 启动即跑一轮检测，让界面一打开就有内容，
+        // 而不是让用户先点一次"刷新"才知道有没有数据。
+        // 用 Load 事件而非构造函数直接调用：构造函数此刻窗口尚未显示，
+        // 启动一轮异步检测会让界面先闪一下空态再跳到有数据。
+        Loaded += async (_, _) => await _overviewViewModel.RefreshAsync();
     }
 
     // ==================== 标题栏 ====================

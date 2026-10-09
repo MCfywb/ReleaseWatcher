@@ -805,6 +805,83 @@ public sealed class DesignSystemTests
         }
     }
 
+    /// <summary>
+    /// 视图 XAML 引用的静态资源键，必须真实存在于主题字典中。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>2026-10-10 真实故障（启动即崩）：</b>检测列表页写了
+    /// <c>Space.Margin.Right.XS</c>，而 <c>Spacing.xaml</c> 只定义了
+    /// <c>S / M / L / XL</c>（无 <c>XS</c>）。该错误
+    /// <b>编译期不报错、单元测试也不报错</b>，只在
+    /// <c>InitializeComponent()</c> 时抛
+    /// <c>XamlParseException: 找不到名为Space.Margin.Right.XS 的资源</c>，
+    /// 表现为「exe 打不开」。
+    /// </para>
+    /// <para>
+    /// <b>为何既有守卫没拦住：</b>此前的守卫都是<b>反向</b>断言
+    /// （禁止某类写法），没有<b>正向</b>验证"引用的键确实存在"。
+    /// 拼错键名不在任何禁止清单里。
+    /// </para>
+    /// <para>
+    /// <b>覆盖范围：</b>只校验 <c>{StaticResource X}</c> 形式的显式引用。
+    /// <c>DynamicResource</c> 运行时才解析、且允许缺失时回退，
+    /// 不在此强制（且多数 DynamicResource 取的是画刷，
+    /// 由<code>ControlsXaml_MustUseDynamicResourceForBrushes</code> 另行守护）。
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ViewXaml_StaticResourceKeysMustExistInThemeDictionaries()
+    {
+        var themeDir = Path.Combine(AppProjectRoot(), "Resources", "Theme");
+
+        // 汇总所有主题字典里定义的键（Theme.xaml 是合并入口，不含新键）。
+        var defined = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var dictionary in Directory.EnumerateFiles(themeDir, "*.xaml"))
+        {
+            if (Path.GetFileName(dictionary).Equals("Theme.xaml", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            defined.UnionWith(ReadResourceKeys(dictionary));
+        }
+
+        var referenced = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var view in Directory.EnumerateFiles(Path.Combine(AppProjectRoot(), "Views"), "*.xaml"))
+        {
+            // 窗口自身 <Window.Resources> 里的键（如 IconGlyph、ChromeButton）
+            // 是合法的本地资源，必须计入"已定义"，否则会把它们误报为缺失。
+            defined.UnionWith(ReadResourceKeys(view));
+
+            var content = File.ReadAllText(view);
+
+            var matches = Regex.Matches(
+                content,
+                @"\{StaticResource\s+(?<key>[A-Za-z0-9_.]+)\s*\}",
+                RegexOptions.None,
+                TimeSpan.FromSeconds(2));
+
+            foreach (Match match in matches)
+            {
+                var key = match.Groups["key"].Value;
+
+                if (!defined.Contains(key))
+                {
+                    referenced.TryAdd(key, Path.GetFileName(view));
+                }
+            }
+        }
+
+        Assert.True(
+            referenced.Count == 0,
+            "视图 XAML 引用了主题字典中不存在的静态资源键 —— "
+            + "编译期与单元测试均不报错，只在InitializeComponent() 时抛 "
+            + "XamlParseException，表现为「exe 打不开」："
+            + string.Join(" | ", referenced.Select(kv => $"{kv.Key}（{kv.Value}）").Take(8)));
+    }
+
     /// <summary>App 项目根目录。</summary>
     private static string AppProjectRoot()
         => Path.Combine(SolutionLayout.SolutionRoot, "src", "ReleaseWatcher.App");
