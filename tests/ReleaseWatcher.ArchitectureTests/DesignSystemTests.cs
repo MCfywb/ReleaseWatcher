@@ -244,6 +244,105 @@ public sealed class DesignSystemTests
             + string.Join("、", offenders.Distinct().Take(5)));
     }
 
+    /// <summary>
+    /// 模板内的 <c>ContentPresenter</c> 必须显式传递前景色与字体。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 这条断言来自一次真实故障：用户反馈"深色模式下已选中、未选中、
+    /// 已禁用这几个字看不见"。
+    /// </para>
+    /// <para>
+    /// <b>根因</b>：<c>ContentPresenter</c> <strong>不会</strong>把父控件的
+    /// <c>Foreground</c> 自动传给它呈现的内容。因此模板里的
+    /// <c>ContentPresenter</c> 若未显式绑定，文字会落到系统默认黑 ——
+    /// 在浅色主题下只是勉强可辨（缺陷被掩盖），在深色主题下彻底消失。
+    /// WPF 的隐式样式同样不会穿透到模板内部由 ContentPresenter 生成的元素。
+    /// </para>
+    /// <para>
+    /// <b>为什么必须用测试守护</b>：编译期完全正常，只有切到深色主题
+    /// 肉眼才看得出。<c>Button.Base</c> 当时就已经漏了 ——
+    /// 只是因为 Primary 样式恰好把 Foreground 设在了别处才没暴露。
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ContentPresenters_MustPropagateForegroundAndFont()
+    {
+        var path = Path.Combine(AppProjectRoot(), ThemeDirectory, "Controls.xaml");
+        var content = File.ReadAllText(path);
+
+        // 逐个 <ContentPresenter ... /> 片段检查
+        var presenters = Regex.Matches(
+            content,
+            "<ContentPresenter\\b[^>]*>",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(2));
+
+        Assert.True(
+            presenters.Count > 0,
+            "Controls.xaml 中未找到 ContentPresenter —— 模板结构可能已变，请同步更新本断言。");
+
+        var offenders = new List<string>();
+
+        foreach (Match match in presenters)
+        {
+            var element = match.Value;
+
+            // TextElement.Foreground / TextBlock.Foreground 任一即可
+            var hasForeground =
+                element.Contains("TextElement.Foreground", StringComparison.Ordinal)
+                || element.Contains("TextBlock.Foreground", StringComparison.Ordinal);
+
+            // ComboBox 的 ContentPresenter 用 SelectionBoxItem，
+            // 其文字颜色由外层 ComboBox.Foreground 决定，同样需要传递。
+            if (!hasForeground)
+            {
+                offenders.Add(Trim(element));
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "以下 ContentPresenter 未传递前景色，其内容在深色主题下会不可见："
+            + string.Join(" | ", offenders)
+            + "。修法：加 TextElement.Foreground=\"{TemplateBinding Foreground}\"。");
+    }
+
+    [Fact]
+    public void AccentBrush_ShouldMatchBetweenLightAndDarkThemes()
+    {
+        // Accent 若两套主题不一致，用户切换主题时蓝色会跳变 ——
+        // 视觉上像是"主题没切干净"。
+        var light = ReadResourceKeys(Path.Combine(AppProjectRoot(), ThemeDirectory, "Colors.Light.xaml"));
+        var dark = ReadResourceKeys(Path.Combine(AppProjectRoot(), ThemeDirectory, "Colors.Dark.xaml"));
+
+        var lightKeys = light.OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        var darkKeys = dark.OrderBy(k => k, StringComparer.Ordinal).ToArray();
+
+        var onlyInLight = lightKeys.Except(darkKeys, StringComparer.Ordinal).ToArray();
+        var onlyInDark = darkKeys.Except(lightKeys, StringComparer.Ordinal).ToArray();
+
+        Assert.True(
+            onlyInLight.Length == 0 && onlyInDark.Length == 0,
+            $"深浅两套主题的键必须完全一致。仅浅色有：{string.Join("、", onlyInLight)}；"
+            + $"仅深色有：{string.Join("、", onlyInDark)}");
+    }
+
+    [Fact]
+    public void AllThemeFiles_ShouldParseAsValidXml()
+    {
+        // XAML 字典若 XML 非法，MergeDictionaries 会静默失效或启动崩溃。
+        foreach (var fileName in new[] { "Theme.xaml", "Colors.Light.xaml", "Colors.Dark.xaml",
+                                        "Typography.xaml", "Spacing.xaml", "Controls.xaml" })
+        {
+            var path = Path.Combine(AppProjectRoot(), ThemeDirectory, fileName);
+
+            var exception = Record.Exception(() => XDocument.Load(path));
+
+            Assert.True(exception is null, $"{fileName} 不是合法 XML：{exception?.Message}");
+        }
+    }
+
     /// <summary>App 项目根目录。</summary>
     private static string AppProjectRoot()
         => Path.Combine(SolutionLayout.SolutionRoot, "src", "ReleaseWatcher.App");

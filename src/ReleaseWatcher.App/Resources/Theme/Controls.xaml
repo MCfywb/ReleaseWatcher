@@ -63,7 +63,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="MinHeight" Value="32" />
-        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="Padding" Value="{StaticResource Space.Padding.Horizontal.M}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="Template">
@@ -77,13 +77,22 @@
                             SnapsToDevicePixels="True">
                         <!--
                             居中而非左对齐：按钮文字按内容宽度居中是桌面惯例。
-                            Padding 已含左右 16，与圆角配合留出呼吸空间。
+                            Padding 已含左右 Space.M，与圆角配合留出呼吸空间。
+
+                            TextElement.* 必须显式传递：ContentPresenter 不会把
+                            Button 的 Foreground 自动传给内容元素。
+                            缺这一句时按钮文字为系统默认黑 ——
+                            在深色主题下不可见，且不影响 Button.Primary 的白字
+                            （那个样式恰好把Foreground 设在了 ContentPresenter 上）。
                         -->
                         <ContentPresenter x:Name="ContentSite"
                                           HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
                                           Margin="{TemplateBinding Padding}"
-                                          RecognizesAccessKey="True" />
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"
+                                          TextElement.FontFamily="{TemplateBinding FontFamily}"
+                                          TextElement.FontSize="{TemplateBinding FontSize}" />
                     </Border>
 
                     <!-- 状态触发器放在模板内：换模板时状态样式随之带走，不易漏改 -->
@@ -128,14 +137,19 @@
     <Style x:Key="Button.Primary" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource Font.UI}" />
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="FontWeight" Value="Normal" />
+        <!--
+            Semibold 而非 Regular：Accent 提亮后（#0A84FF），白字对比度约 3.0:1，
+            低于 AA 正文线4.5:1。Semibold 在 WCAG 中可按大字号处理（阈值 3:1），
+            既解决可读性，也让主要动作在视觉上更突出。
+        -->
+        <Setter Property="FontWeight" Value="SemiBold" />
         <!-- 反色文字：Accent 底色上的对比色 -->
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text.OnAccent}" />
         <Setter Property="Background" Value="{DynamicResource Brush.Accent}" />
         <!-- 实心按钮不需要描边 -->
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="MinHeight" Value="32" />
-        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="Padding" Value="{StaticResource Space.Padding.Horizontal.M}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="Template">
@@ -148,7 +162,10 @@
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
                                           Margin="{TemplateBinding Padding}"
-                                          RecognizesAccessKey="True" />
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"
+                                          TextElement.FontFamily="{TemplateBinding FontFamily}"
+                                          TextElement.FontSize="{TemplateBinding FontSize}" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
@@ -186,7 +203,7 @@
         <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="Padding" Value="{StaticResource Space.Padding.Input}" />
         <Setter Property="MinHeight" Value="32" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
@@ -277,10 +294,26 @@
                                   Data="M1,4 L4,7 L10,1" />
                         </Border>
 
+                        <!--
+                            必须显式设 Foreground。
+
+                            ContentPresenter 在 StackPanel 内**不会**把 CheckBox 的
+                            Foreground 传给它的内容 —— 它只在 Content 为
+                            字符串 / 元素且模板含 ContentHost 标记时才做向下传递。
+                            缺这一句的后果：勾选框与勾号正常，文字却是系统默认黑，
+                            在深色主题下完全看不见（浅色下只是勉强可辨，
+                            因此这个缺陷很容易被漏掉）。
+
+                            页面里的 TextBlock 也必须设 —— WPF 的隐式样式
+                            不会穿透到模板内部由 ContentPresenter 生成的元素。
+                        -->
                         <ContentPresenter x:Name="ContentSite"
-                                          Margin="8,0,0,0"
+                                          Margin="{StaticResource Space.Padding.Horizontal.S}"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                          RecognizesAccessKey="True" />
+                                          RecognizesAccessKey="True"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"
+                                          TextElement.FontFamily="{TemplateBinding FontFamily}"
+                                          TextElement.FontSize="{TemplateBinding FontSize}" />
                     </StackPanel>
 
                     <ControlTemplate.Triggers>
@@ -377,12 +410,15 @@
                                       IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" />
 
                         <ContentPresenter x:Name="ContentSite"
-                                          Margin="12,0,32,0"
+                                          Margin="{StaticResource Space.Padding.Horizontal.M}"
                                           HorizontalAlignment="Left"
                                           VerticalAlignment="Center"
                                           IsHitTestVisible="False"
                                           Content="{TemplateBinding SelectionBoxItem}"
-                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"
+                                          TextElement.FontFamily="{TemplateBinding FontFamily}"
+                                          TextElement.FontSize="{TemplateBinding FontSize}" />
 
                         <!--
                             WPF 的 ComboBox 没有 PlaceholderText 属性（那是 WinUI 的）。
@@ -397,7 +433,7 @@
                                IsOpen="{TemplateBinding IsDropDownOpen}"
                                Placement="Bottom"
                                PopupAnimation="Fade">
-                            <Border Margin="0,4,0,0"
+                            <Border Margin="0,{StaticResource Space.XS},0,0"
                                     MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                                     MaxHeight="320"
                                     Background="{DynamicResource Brush.Surface}"
@@ -406,7 +442,7 @@
                                     CornerRadius="{StaticResource Radius.Input}"
                                     SnapsToDevicePixels="True">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <ItemsPresenter Margin="4" />
+                                    <ItemsPresenter Margin="{StaticResource Space.XS}" />
                                 </ScrollViewer>
                             </Border>
                         </Popup>
@@ -442,7 +478,7 @@
         <Setter Property="FontFamily" Value="{StaticResource Font.UI}" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
-        <Setter Property="Padding" Value="8" />
+        <Setter Property="Padding" Value="{StaticResource Space.Padding.S}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>
@@ -451,7 +487,10 @@
                             Padding="{TemplateBinding Padding}"
                             Background="Transparent"
                             CornerRadius="{StaticResource Radius.Small}">
-                        <ContentPresenter />
+                        <!-- 同Button / CheckBox：需显式传递前景色与字体 -->
+                        <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"
+                                          TextElement.FontFamily="{TemplateBinding FontFamily}"
+                                          TextElement.FontSize="{TemplateBinding FontSize}" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
