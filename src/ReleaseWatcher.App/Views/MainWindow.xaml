@@ -4,17 +4,232 @@
         Title="ReleaseWatcher">
 
     <!--
-        结构骨架，非最终设计。
+        Phase 1 —— 设计系统预览页（D-046）。
 
-        Phase 1（Design System + 静态 UI）将替换本文件：
-        - Sidebar（概览 / 检测列表 / 下载 / 设置，见 DECISIONS.md D-027）
-        - Toolbar
-        - 检测列表的 Sidebar + Repository List + Release Detail 三栏 Split View
+        用途：把 Design System 的每一项都摆在屏幕上，便于肉眼核对规范是否落地：
+            · 语义色是否覆盖完整、深浅两套是否都可用
+            · 6 级字阶的实际观感与行高
+            · 8px 间距体系
+            · Button / TextBox / ComboBox / CheckBox / ScrollBar 的三态
 
-        本阶段只验证组合根与 DI 链路能否跑通，故仅放置一个空 Grid。
-        视觉规范（配色、字阶、间距、圆角）见 docs/reference/development-plan-ui.md，
-        不得在此硬编码 —— 应统一走 Resources/ThemeBrushes.xaml（D-026）。
+        为什么单独建预览页而不是直接做 Dashboard：
+            设计系统需要反复调整，而 Dashboard 一旦掺入业务布局，
+            每次调色都要在业务结构里辨认"是设计问题还是布局问题"。
+            先隔离验证，再进入静态 UI（下一步候选 B）。
+
+        所有取值均来自 Resources/Theme/Theme.xaml，此处**不硬编码任何颜色或字号**
+        —— 若发现必须写字面量才能显示，说明设计系统缺了东西，
+        应补到Theme 字典里，而不是在页面上绕过（D-026）。
     -->
-    <Grid />
+    <Grid Background="{DynamicResource Brush.Background.Primary}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
+        <!-- ==================== Toolbar ==================== -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource Brush.Background.Secondary}"
+                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                BorderThickness="0,0,0,1"
+                Padding="{StaticResource Size.ContentPadding}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Style="{StaticResource Text.CardTitle}"
+                           VerticalAlignment="Center"
+                           Text="Design System 预览" />
+
+                <!-- 主题切换：验证深浅两套色板与 DynamicResource 是否真的生效 -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Margin="0,0,8,0"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource Text.Secondary}"
+                               Text="主题" />
+                    <ComboBox x:Name="ThemeSelector"
+                              Width="120"
+                              SelectionChanged="ThemeSelector_SelectionChanged">
+                        <ComboBoxItem Content="浅色" Tag="Light" />
+                        <ComboBoxItem Content="深色" Tag="Dark" />
+                    </ComboBox>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ==================== Content ==================== -->
+        <ScrollViewer Grid.Row="1"
+                      Padding="{StaticResource Size.ContentPadding}"
+                      HorizontalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <!-- 语义色 -->
+                <TextBlock Style="{StaticResource Text.SectionTitle}" Text="语义色" />
+
+                <TextBlock Margin="0,4,0,12"
+                           Style="{StaticResource Text.Secondary}"
+                           Text="按语义而非颜色名组织；深浅两套同名键，切换时不应出现任何硬编码色块。" />
+
+                <ItemsControl x:Name="ColorSamples" />
+
+                <Border Margin="0,12,0,0"
+                        Height="1"
+                        Background="{DynamicResource Brush.Border.Subtle}" />
+
+                <!-- 字阶 -->
+                <TextBlock Margin="0,24,0,0"
+                           Style="{StaticResource Text.SectionTitle}"
+                           Text="字体层级" />
+
+                <TextBlock Margin="0,12,0,0" Style="{StaticResource Text.PageTitle}" Text="Page Title 28" />
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.SectionTitle}" Text="Section Title 20" />
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.CardTitle}" Text="Card Title 16" />
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Body}" Text="Body 14 —— 主要正文内容，界面绝大多数文字属这一级。" />
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="Secondary 13 —— 次要说明、时间戳、路径。" />
+                <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Caption}" Text="Caption 12 —— 最弱一级的辅助信息。" />
+
+                <Border Margin="0,24,0,0"
+                        Height="1"
+                        Background="{DynamicResource Brush.Border.Subtle}" />
+
+                <!-- 控件 -->
+                <TextBlock Margin="0,24,0,0"
+                           Style="{StaticResource Text.SectionTitle}"
+                           Text="控件" />
+
+                <!-- Button 三态：正常 / 悬停 / 禁用 -->
+                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                    <Button Margin="0,0,8,0" Content="Primary" Style="{StaticResource Button.Primary}" />
+                    <Button Margin="0,0,8,0" Content="Secondary" />
+                    <Button Margin="0,0,8,0" Content="Disabled" IsEnabled="False" />
+                </StackPanel>
+
+                <!-- TextBox 三态 -->
+                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                    <TextBox Width="200" Margin="0,0,8,0" Text="Normal" />
+                    <TextBox Width="200" Margin="0,0,8,0" Text="Focused" />
+                    <TextBox Width="200" Text="Disabled" IsEnabled="False" />
+                </StackPanel>
+
+                <!-- ComboBox 与 CheckBox -->
+                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                    <ComboBox Width="180" Margin="0,0,24,0">
+                        <ComboBoxItem Content="跟随系统" />
+                        <ComboBoxItem Content="浅色" />
+                        <ComboBoxItem Content="深色" />
+                    </ComboBox>
+                    <CheckBox Margin="0,0,16,0" Content="已选中" IsChecked="True" />
+                    <CheckBox Margin="0,0,16,0" Content="未选中" />
+                    <CheckBox Content="已禁用" IsEnabled="False" />
+                </StackPanel>
+
+                <!-- ScrollBar：右侧列表会显示自定义细条样式 -->
+                <Border Margin="0,12,0,0"
+                        Padding="0"
+                        Height="140"
+                        Background="{DynamicResource Brush.Surface}"
+                        BorderBrush="{DynamicResource Brush.Border}"
+                        BorderThickness="1"
+                        CornerRadius="{StaticResource Radius.Card}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Text.Secondary}" Text="滚动这一列以查看自定义 ScrollBar。" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="右侧应为 10px 细条、无箭头按钮。" />
+                            <Rectangle Margin="0,12,0,0" Height="1" Fill="{DynamicResource Brush.Border.Subtle}" />
+                            <TextBlock Margin="0,12,0,0" Style="{StaticResource Text.Secondary}" Text="01" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="02" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="03" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="04" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="05" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="06" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="07" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="08" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="09" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="10" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="11" />
+                            <TextBlock Margin="0,8,0,0" Style="{StaticResource Text.Secondary}" Text="12" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- 圆角与间距 -->
+                <TextBlock Margin="0,24,0,0"
+                           Style="{StaticResource Text.SectionTitle}"
+                           Text="圆角与间距" />
+
+                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                    <Border Width="120" Height="56" Margin="0,0,12,0"
+                            Background="{DynamicResource Brush.Surface}"
+                            BorderBrush="{DynamicResource Brush.Border}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource Radius.Card}">
+                        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Style="{StaticResource Text.Caption}" Text="Card 12" />
+                    </Border>
+                    <Border Width="120" Height="56" Margin="0,0,12,0"
+                            Background="{DynamicResource Brush.Surface}"
+                            BorderBrush="{DynamicResource Brush.Border}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource Radius.Button}">
+                        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Style="{StaticResource Text.Caption}" Text="Button 8" />
+                    </Border>
+                    <Border Width="120" Height="56"
+                            Background="{DynamicResource Brush.Surface}"
+                            BorderBrush="{DynamicResource Brush.Border}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource Radius.Badge}">
+                        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Style="{StaticResource Text.Caption}" Text="Badge 6" />
+                    </Border>
+                </StackPanel>
+
+                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                    <Border Width="8" Height="32" Margin="0,0,4,0" Background="{DynamicResource Brush.Accent}" Opacity="0.35" />
+                    <TextBlock VerticalAlignment="Center" Style="{StaticResource Text.Caption}"
+                               Text="间距体系 4 / 8 / 16 / 24 / 32 / 40 / 48" />
+                </StackPanel>
+
+                <!-- 状态色 -->
+                <TextBlock Margin="0,24,0,0"
+                           Style="{StaticResource Text.SectionTitle}"
+                           Text="状态色" />
+
+                <TextBlock Margin="0,4,0,12"
+                           Style="{StaticResource Text.Secondary}"
+                           Text="原方案要求：不靠颜色单独传达状态。例：新版本应为蓝点 + NEW 文字，而非整块红色。" />
+
+                <StackPanel Orientation="Horizontal">
+                    <Border Margin="0,0,8,0" Padding="12,4"
+                            Background="{DynamicResource Brush.Accent}"
+                            CornerRadius="{StaticResource Radius.Badge}">
+                        <TextBlock Foreground="{DynamicResource Brush.Text.OnAccent}"
+                                   Style="{StaticResource Text.Caption}" Text="NEW" />
+                    </Border>
+                    <Border Margin="0,0,8,0" Padding="12,4"
+                            Background="{DynamicResource Brush.Success}"
+                            CornerRadius="{StaticResource Radius.Badge}">
+                        <TextBlock Foreground="{DynamicResource Brush.Text.OnAccent}"
+                                   Style="{StaticResource Text.Caption}" Text="已完成" />
+                    </Border>
+                    <Border Margin="0,0,8,0" Padding="12,4"
+                            Background="{DynamicResource Brush.Warning}"
+                            CornerRadius="{StaticResource Radius.Badge}">
+                        <TextBlock Foreground="{DynamicResource Brush.Text.OnAccent}"
+                                   Style="{StaticResource Text.Caption}" Text="重试中" />
+                    </Border>
+                    <Border Padding="12,4"
+                            Background="{DynamicResource Brush.Error}"
+                            CornerRadius="{StaticResource Radius.Badge}">
+                        <TextBlock Foreground="{DynamicResource Brush.Text.OnAccent}"
+                                   Style="{StaticResource Text.Caption}" Text="失败" />
+                    </Border>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </Window>

@@ -1,4 +1,9 @@
-﻿using System.Windows;
+﻿using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using ReleaseWatcher.App.Services;
+using ReleaseWatcher.Application.Abstractions;
 
 namespace ReleaseWatcher.App.Views;
 
@@ -7,9 +12,8 @@ namespace ReleaseWatcher.App.Views;
 /// </summary>
 /// <remarks>
 /// <para>
-/// 目前为骨架：只有最小尺寸与标题，用于验证组合根与 DI 链路是否通。
-/// 实际内容（Sidebar / Toolbar / Split View）在 Phase 1 静态 UI 阶段实现，
-/// 见 <c>NOW.md</c> 下一节。
+/// Phase 1 当前承载**设计系统预览页**：把 Theme 中的色板、字阶、控件
+/// 三态摆在屏幕上供肉眼核对。见 XAML 内注释。
 /// </para>
 /// <para>
 /// **约束：不要在此类中 <c>using ReleaseWatcher.Infrastructure.*</c>。**
@@ -19,23 +23,156 @@ namespace ReleaseWatcher.App.Views;
 /// </remarks>
 public partial class MainWindow : Window
 {
-    /// <summary>由 DI 容器解析并注入（见 App.xaml.cs 的 OnStartup）。</summary>
-    public MainWindow(Application.Abstractions.IAppPaths paths)
+    /// <summary>
+    /// 预览页要展示的语义色清单。
+    /// </summary>
+    /// <remarks>
+    /// 由 <see cref="ThemeManager"/> 逐个解析，**不在此处写死颜色值** ——
+    /// 若某个键解析不到，页面上会出现"取不到色"的缺口，
+    /// 这正是需要被看见的问题。
+    /// </remarks>
+    private static readonly string[] SemanticBrushKeys =
+    [
+        "Brush.Background.Primary",
+        "Brush.Background.Secondary",
+        "Brush.Surface",
+        "Brush.Text.Primary",
+        "Brush.Text.Secondary",
+        "Brush.Border",
+        "Brush.Accent",
+        "Brush.Success",
+        "Brush.Warning",
+        "Brush.Error",
+    ];
+
+    public MainWindow(IAppPaths paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
-        // 标题中显示路径，用于验证 IAppPaths 已正确注入。
-        // Phase 1 会替换为真实布局与本地化标题。
-        Title = $"ReleaseWatcher — {paths.AppDirectory}";
-
         InitializeComponent();
 
-        // 依据 docs/reference/development-plan-ui.md 的视觉规范：
-        // 最小 1200×760，推荐 1440×900。
-        Width = 1440;
-        Height = 900;
-        MinWidth = 1200;
-        MinHeight = 760;
+        // 标题中显示路径，用于验证 IAppPaths 已正确注入。
+        // 真实标题将随 i18n 落地后改为资源引用。
+        Title = $"ReleaseWatcher — {paths.AppDirectory}";
+
+        // 尺寸取自设计系统（Spacing.xaml），与原方案第 4.1 节一致。
+        Width = ThemeMetrics.WindowWidth;
+        Height = ThemeMetrics.WindowHeight;
+        MinWidth = ThemeMetrics.WindowMinWidth;
+        MinHeight = ThemeMetrics.WindowMinHeight;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
+
+        BuildColorSamples();
+
+        ThemeSelector.SelectedIndex = 0;
+    }
+
+    /// <summary>
+    /// 逐个解析语义色并生成色板。
+    /// </summary>
+    /// <remarks>
+    /// 解析失败时画一个红色描边的"未定义"块，而不是静默跳过 ——
+    /// 缺色是设计系统的真实缺陷，静默失败会让人误以为色板已完整。
+    /// </remarks>
+    private void BuildColorSamples()
+    {
+        ColorSamples.Items.Clear();
+
+        var panel = new WrapPanel();
+
+        foreach (var key in SemanticBrushKeys)
+        {
+            panel.Children.Add(CreateSwatch(key));
+        }
+
+        ColorSamples.Items.Add(panel);
+    }
+
+    /// <summary>
+    /// 生成一个色板卡片：色块 + 键名 + 十六进制值。
+    /// </summary>
+    private static Border CreateSwatch(string key)
+    {
+        var brush = ThemeManager.ResolveBrush(key);
+
+        if (brush is SolidColorBrush solid)
+        {
+            return new Border
+            {
+                Width = 168,
+                Margin = new Thickness(0, 0, 8, 8),
+                Padding = new Thickness(8),
+                Background = solid,
+                CornerRadius = new CornerRadius(6),
+                ToolTip = $"{key} = {solid.Color}",
+                Child = new TextBlock
+                {
+                    Text = $"{key}\n{solid.Color}",
+                    Foreground = ThemeManager.ResolveBrush("Brush.Text.Primary"),
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap,
+                },
+            };
+        }
+
+        return new Border
+        {
+            Width = 168,
+            Margin = new Thickness(0, 0, 8, 8),
+            Padding = new Thickness(8),
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderBrush = ThemeManager.ResolveBrush("Brush.Error"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Child = new TextBlock
+            {
+                Text = $"{key} — 未定义",
+                Foreground = ThemeManager.ResolveBrush("Brush.Error"),
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+            },
+        };
+    }
+
+    private void ThemeSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ThemeSelector.SelectedItem is ComboBoxItem item
+            && item.Tag is string tag
+            && Enum.TryParse<AppTheme>(tag, out var theme))
+        {
+            ThemeManager.Apply(theme);
+            BuildColorSamples();
+        }
+    }
+}
+
+/// <summary>
+/// 从 Theme 资源中读取的窗口尺寸常量。
+/// </summary>
+/// <remarks>
+/// Spacing.xaml 中的 <c>Size.*</c> 是 <c>x:Double</c> 资源键，
+/// 在代码中通过 <c>Application.Current.TryFindResource</c> 读取。
+/// 这样窗口尺寸与设计系统保持单一来源，不在代码里重写一遍数字。
+/// </remarks>
+internal static class ThemeMetrics
+{
+    public static double WindowWidth => Read("Size.WindowWidth", 1440);
+
+    public static double WindowHeight => Read("Size.WindowHeight", 900);
+
+    public static double WindowMinWidth => Read("Size.WindowMinWidth", 1200);
+
+    public static double WindowMinHeight => Read("Size.WindowMinHeight", 760);
+
+    private static double Read(string key, double fallback)
+    {
+        if (System.Windows.Application.Current?.TryFindResource(key) is double value)
+        {
+            return value;
+        }
+
+        // 读不到说明 Spacing.xaml 未被合并 —— 这本身是配置错误，
+        // 但不应让应用崩溃，回退到原方案给的数值。
+        return fallback;
     }
 }
