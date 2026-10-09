@@ -44,16 +44,26 @@ public static class SolutionLayout
     /// 测试项目目录名。
     /// </summary>
     /// <remarks>
-    /// 两个测试项目的引用策略<strong>刻意相反</strong>：
-    /// 架构测试零引用（检查 .csproj 文本本身），
-    /// 单元测试必须引用被测项目（否则拿不到类型）。
+    /// 三个测试项目的引用策略<strong>刻意不同</strong>：
+    /// <list type="bullet">
+    /// <item><c>ArchitectureTests</c> 零引用 —— 它检查的是 .csproj 文本本身，
+    /// 引用主项目会造成自我循环（见本文件类型注释）。</item>
+    /// <item>单元测试项目（<c>Infrastructure.Tests</c> / <c>Domain.Tests</c>）
+    /// 必须引用被测项目，否则拿不到真实类型。</item>
+    /// </list>
     /// 因此这里只登记名字，不统一约束引用方式 ——
     /// 具体约束见 <c>LayeringTests</c> 中的对应断言。
+    /// <para>
+    /// <b>新增测试项目必须登记到此数组</b>：D-019 边界断言
+    /// （<c>NoProject_MayReferenceLocalizationGenerator</c>）遍历此数组，
+    /// 漏登记会让新项目<b>静默脱离</b>该边界保护。
+    /// </para>
     /// </remarks>
     public static readonly string[] TestProjects =
     [
         "ReleaseWatcher.ArchitectureTests",
         "ReleaseWatcher.Infrastructure.Tests",
+        "ReleaseWatcher.Domain.Tests",
     ];
 
     /// <summary>

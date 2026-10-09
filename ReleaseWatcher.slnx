@@ -7,6 +7,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ReleaseWatcher.ArchitectureTests/ReleaseWatcher.ArchitectureTests.csproj" />
+    <Project Path="tests/ReleaseWatcher.Domain.Tests/ReleaseWatcher.Domain.Tests.csproj" />
     <Project Path="tests/ReleaseWatcher.Infrastructure.Tests/ReleaseWatcher.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>

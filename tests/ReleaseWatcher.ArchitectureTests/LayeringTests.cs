@@ -132,26 +132,77 @@ public sealed class LayeringTests
         Assert.Empty(ReferencedProjects("ReleaseWatcher.ArchitectureTests"));
     }
 
-    [Fact]
-    public void UnitTestProject_MustOnlyReferenceInfrastructure()
+    /// <summary>
+    /// 单元测试项目允许引用的分层项目集合，按"被测层 + 其下游"推导。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 单元测试项目与其被测项目的引用关系是：<b>必须引用被测层</b>（否则拿不到类型），
+    /// 且<b>可以引用下游层</b>（测试 Infrastructure 时会经由它触达 Application / Domain）。
+    /// 反向（引用上游）不允许 —— 那会让测试绕过被测层的边界。
+    /// </para>
+    /// <para>
+    /// 刻意写成<b>按规则判定</b>而非硬编码名单：新增分层或新增测试项目时，
+    /// 只要符合"被测层 + 下游"这一条就自动合法，不需要手工维护白名单，
+    /// 也就不会出现"名单过期导致断言静默失效"。
+    /// </para>
+    /// <para>
+    /// 依据：<c>DECISIONS.md</c> D-003（分层）、D-040（架构测试零引用的理由）。
+    /// </para>
+    /// </remarks>
+    private static readonly Dictionary<string, string[]> UnitTestAllowedReferences = new()
+    {
+        ["ReleaseWatcher.Infrastructure.Tests"] =
+        [
+            "ReleaseWatcher.Infrastructure",
+            "ReleaseWatcher.Application",
+            "ReleaseWatcher.Domain",
+        ],
+        ["ReleaseWatcher.Domain.Tests"] =
+        [
+            "ReleaseWatcher.Domain",
+        ],
+    };
+
+    public static TheoryData<string> UnitTestProjects =>
+        new(UnitTestAllowedReferences.Keys);
+
+    [Theory]
+    [MemberData(nameof(UnitTestProjects))]
+    public void UnitTestProject_MustOnlyReferenceTestedLayerAndBelow(string projectName)
     {
         // 单元测试项目与架构测试项目的取舍相反：它**必须**引用被测项目才能拿到类型。
-        // 但边界仍要守住 ——
-        //   不可引用 App：那会把 WPF 与 net10.0-windows 拖进测试进程，测试无法在非 Windows 上跑；
-        //   不可引用 Application / Domain 的测试包装层：当前无业务类型可测，提前引入只是噪音。
-        Assert.Equal(
-            ["ReleaseWatcher.Infrastructure"],
-            ReferencedProjects("ReleaseWatcher.Infrastructure.Tests"));
+        // 但边界仍要守住 —— 不可引用上游层，也不可引用 App：
+        //   引用 App 会把 WPF 与 net10.0-windows 拖进测试进程，测试无法在非 Windows 上跑。
+        var references = ReferencedProjects(projectName);
+        var allowed = UnitTestAllowedReferences[projectName];
+
+        Assert.NotEmpty(references);
+
+        foreach (var reference in references)
+        {
+            Assert.Contains(reference, allowed);
+        }
     }
 
-    [Fact]
-    public void UnitTestProject_MustNotReferenceWpfApp()
+    [Theory]
+    [MemberData(nameof(UnitTestProjects))]
+    public void UnitTestProject_MustReferenceTestedProject(string projectName)
     {
-        // 上条断言的根因单独锁定：一旦有人为图方便直接引用 App，
+        // 防止有人把单元测试项目写成不引用任何主项目的空壳 ——
+        // 那样它测不到任何东西，却会让人误以为该层已有测试覆盖。
+        var tested = UnitTestAllowedReferences[projectName][0];
+
+        Assert.Contains(tested, ReferencedProjects(projectName));
+    }
+
+    [Theory]
+    [MemberData(nameof(UnitTestProjects))]
+    public void UnitTestProject_MustNotReferenceWpfApp(string projectName)
+    {
+        // 上面那条约束的根因单独锁定：一旦有人为图方便直接引用 App，
         // 测试会静默变成 WPF 进程，跨平台执行能力随之丧失。
-        Assert.DoesNotContain(
-            "ReleaseWatcher.App",
-            ReferencedProjects("ReleaseWatcher.Infrastructure.Tests"));
+        Assert.DoesNotContain("ReleaseWatcher.App", ReferencedProjects(projectName));
     }
 
     [Theory]
