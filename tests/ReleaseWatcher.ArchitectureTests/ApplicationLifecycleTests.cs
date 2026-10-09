@@ -1,0 +1,189 @@
+namespace ReleaseWatcher.ArchitectureTests;
+
+/// <summary>
+/// 应用生命周期与主题行为的守卫断言。
+/// </summary>
+/// <remarks>
+/// 这三项都曾是<strong>真实缺陷</strong>，且修复后极易被无意回退，因此固化为测试：
+/// <list type="bullet">
+/// <item>关闭主窗口后进程无窗口残留 —— <c>ShutdownMode="OnExplicitShutdown"</c>
+/// 是为尚未实现的托盘预留的，托盘缺席时它只造成"关窗后进程还在"。</item>
+/// <item>主题选择未持久化 —— 用户在下拉框选的主题重启后丢失。</item>
+/// <item>系统主题监听未解除 —— <c>SystemEvents</c> 是静态事件，
+/// 不解除会一直持有订阅者。</item>
+/// </list>
+///
+/// 依据：<c>NOW.md</c> 已知待修项、<c>DECISIONS.md</c> D-026 / D-046、
+/// <c>RISKS.md</c> Q-007、<c>AGENTS.md</c> 1.6.2。
+/// </remarks>
+public sealed class ApplicationLifecycleTests
+{
+    private static string AppSource(string relativePath)
+        => Path.Combine(SolutionLayout.SolutionRoot, "src", "ReleaseWatcher.App", relativePath);
+
+    private static string ReadAppSource(string relativePath)
+    {
+        var path = AppSource(relativePath);
+        Assert.True(File.Exists(path), $"未找到 {path}");
+        return File.ReadAllText(path);
+    }
+
+    [Fact]
+    public void AppXaml_MustNotUseExplicitShutdownUntilTrayExists()
+    {
+        // OnExplicitShutdown 的语义是"关闭最后一个窗口时不退出进程"。
+        // 托盘尚未实现（D-026 的设置项也未生效），该设置会让用户关闭主窗口后
+        // 只剩一个看不见的进程，只能靠任务管理器结束。
+        // 实现托盘且「关闭时最小化到托盘」生效后，方可改回 —— 届时应同步删除本断言。
+        //
+        // 只检查 <Application> 元素上的属性，忽略注释：
+        // App.xaml 的注释里会说明"当初为何设过OnExplicitShutdown、为何改回"，
+        // 那是决策记录而非生效设置，按文本全文匹配会误报。
+        var appXaml = ReadAppSource("App.xaml");
+
+        var applicationTag = System.Text.RegularExpressions.Regex.Match(
+            appXaml,
+            @"<Application\b[^>]*>",
+            System.Text.RegularExpressions.RegexOptions.None,
+            TimeSpan.FromSeconds(2));
+
+        Assert.True(applicationTag.Success, "App.xaml 中未找到 <Application> 元素");
+
+        Assert.DoesNotContain(
+            "OnExplicitShutdown",
+            applicationTag.Value,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThemeManager_MustWatchSystemThemeChanges()
+    {
+        // 跟随系统需实时生效：系统切换深浅色后界面应随之更新，无需重启。
+        var themeManager = ReadAppSource(Path.Combine("Services", "ThemeManager.cs"));
+
+        Assert.Contains(
+            "SystemEvents.UserPreferenceChanged",
+            themeManager,
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            "StartWatchingSystemChanges",
+            themeManager,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThemeManager_SystemEventHandler_MustMarshalToUiThread()
+    {
+        // SystemEvents 在系统事件线程上触发，不在 UI 线程。
+        // Application.Resources 有线程亲和性，在错误线程改动会抛
+        // InvalidOperationException —— 这类故障只在用户切系统主题时才出现，极难复现。
+        var themeManager = ReadAppSource(Path.Combine("Services", "ThemeManager.cs"));
+
+        Assert.Contains(
+            "Dispatcher",
+            themeManager,
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            "HasShutdownStarted",
+            themeManager,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AppMustUnsubscribeSystemThemeWatcherOnExit()
+    {
+        // SystemEvents 是静态事件：订阅后若不解除，ThemeManager 与 Application
+        // 会被长期持有而无法回收。托盘驻留场景下进程可能存活很久，泄漏持续累积（Q-007）。
+        var appCode = ReadAppSource("App.xaml.cs");
+
+        Assert.Contains("StopWatchingSystemChanges", appCode, StringComparison.Ordinal);
+
+        // 必须位于 OnExit 内而非 OnStartup：启动时解除没有意义
+        var onExitIndex = appCode.IndexOf("OnExit", StringComparison.Ordinal);
+        Assert.True(onExitIndex > 0, "App.xaml.cs 中未找到 OnExit");
+
+        var unsubscribeIndex = appCode.IndexOf("StopWatchingSystemChanges", StringComparison.Ordinal);
+        Assert.True(
+            unsubscribeIndex > onExitIndex,
+            "StopWatchingSystemChanges 应在 OnExit 中调用，而非 OnStartup");
+    }
+
+    [Fact]
+    public void ThemeManager_ResolveInitialTheme_MustReadConfigFile()
+    {
+        // 持久化契约：初始主题来自 config.json 的 appearance.theme，
+        // 配置缺失时回落 System。原实现无条件返回 System，导致用户选择重启后丢失。
+        var themeManager = ReadAppSource(Path.Combine("Services", "ThemeManager.cs"));
+
+        Assert.Contains("LoadSavedTheme", themeManager, StringComparison.Ordinal);
+        Assert.Contains("configFilePath", themeManager, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThemeManager_MustPersistUserSelection()
+    {
+        // 用户切换主题时必须写入配置，否则偏好无法跨会话保留
+        var themeManager = ReadAppSource(Path.Combine("Services", "ThemeManager.cs"));
+
+        Assert.Contains("TrySaveTheme", themeManager, StringComparison.Ordinal);
+        Assert.Contains("appearance", themeManager, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThemeManager_SaveMustPreserveOtherSettings()
+    {
+        // 配置项会随设置页增多，保存主题时只能改appearance.theme，
+        // 整体覆写会抹掉其他已保存的设置。
+        var themeManager = ReadAppSource(Path.Combine("Services", "ThemeManager.cs"));
+
+        Assert.Contains("UpsertAppearanceTheme", themeManager, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThemeSelector_MustPersistUserSelectionOnChange()
+    {
+        // 只有 Apply 而不落盘 = 持久化写了却永远存不进值，重启后仍丢失。
+        // 处理器必须同时调用 TrySaveTheme。
+        var windowCode = ReadAppSource(Path.Combine("Views", "MainWindow.xaml.cs"));
+
+        Assert.Contains("TrySaveTheme", windowCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThemeSelector_MustNotPersistProgrammaticSelection()
+    {
+        // 构造末尾的 SelectThemeItem 会设置 SelectedItem，从而连带触发
+        // SelectionChanged。若不抑制，首次启动（用户从未选过）也会写一次配置 ——
+        // 系统恰为深色时会把"跟随系统"悄悄固化成"深色"，
+        // 之后系统切浅色也不再跟随，属于静默劫持用户偏好。
+        var windowCode = ReadAppSource(Path.Combine("Views", "MainWindow.xaml.cs"));
+
+        Assert.Contains("_suppressThemePersist", windowCode, StringComparison.Ordinal);
+
+        // 抑制标志必须真的参与守卫判断，不能只是声明了却从不使用
+        Assert.Contains(
+            "if (!_suppressThemePersist)",
+            windowCode,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AppStartup_MustApplyThemeBeforeCreatingWindow()
+    {
+        // 主题必须在创建任何窗口之前定下来：控件样式在构造阶段即解析颜色，
+        // 先创建窗口再切主题会导致可见的闪烁（旧色板 → 新色板）。
+        var appCode = ReadAppSource("App.xaml.cs");
+
+        var applyIndex = appCode.IndexOf("themeManager.Apply", StringComparison.Ordinal);
+        var windowIndex = appCode.IndexOf("Services.GetRequiredService<Views.MainWindow>", StringComparison.Ordinal);
+
+        Assert.True(applyIndex > 0, "App.xaml.cs 中未找到主题应用调用");
+        Assert.True(windowIndex > 0, "App.xaml.cs 中未找到主窗口创建调用");
+
+        Assert.True(
+            applyIndex < windowIndex,
+            "主题必须在创建主窗口之前应用，否则控件会先以旧色板构造再被更新，肉眼可见闪烁");
+    }
+}

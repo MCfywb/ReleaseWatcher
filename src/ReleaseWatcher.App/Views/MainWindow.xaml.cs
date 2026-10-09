@@ -45,11 +45,23 @@ public partial class MainWindow : Window
         "Brush.Error",
     ];
 
+    /// <summary>
+    /// 路径提供者。用于取 <c>config.json</c> 路径以持久化主题选择。
+    /// </summary>
+    /// <remarks>
+    /// 保存为字段是因为构造参数不会自动成为成员 ——
+    /// 而主题下拉框的 <see cref="ThemeSelector_SelectionChanged"/> 处理器
+    /// 需要在构造之后很久才拿到它。
+    /// </remarks>
+    private readonly IAppPaths _paths;
+
     public MainWindow(IAppPaths paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
         InitializeComponent();
+
+        _paths = paths;
 
         // 标题中显示路径，用于验证 IAppPaths 已正确注入。
         // 真实标题将随 i18n 落地后改为资源引用。
@@ -66,7 +78,7 @@ public partial class MainWindow : Window
 
         // 让下拉框反映当前实际主题，而不是硬编码第 0 项。
         //
-        // App.xaml.cs 在创建窗口前已应用 ResolveInitialTheme()，
+        // App.xaml.cs 在创建窗口前已应用 ResolveInitialTheme(paths.ConfigFile)，
         // 此处若固定 SelectedIndex=0，显示就会与实际配色不符
         // （系统为深色时下拉框却显示"浅色"）。
         SelectThemeItem(ThemeManager.Current);
@@ -78,20 +90,45 @@ public partial class MainWindow : Window
     /// <remarks>
     /// 用 Tag 匹配而非索引 —— 下拉框项的顺序属于展示细节，
     /// 用索引绑定会在调整顺序后静默错位。
+    /// <para>
+    /// <b>期间会触发 <see cref="_suppressThemePersist"/>：</b>
+    /// 设置 <c>SelectedItem</c> 会连带触发 <c>SelectionChanged</c>，
+    /// 而本方法在构造函数末尾被调用。此时若不抑制，
+    /// 首次启动（用户从未选过主题）也会写一次 config.json ——
+    /// 系统恰为深色时就会把"跟随系统"悄悄固化成"深色"。
+    /// </para>
     /// </remarks>
     private void SelectThemeItem(AppTheme theme)
     {
-        foreach (var item in ThemeSelector.Items.OfType<ComboBoxItem>())
+        _suppressThemePersist = true;
+
+        try
         {
-            if (item.Tag is string tag
-                && Enum.TryParse<AppTheme>(tag, out var parsed)
-                && parsed == theme)
+            foreach (var item in ThemeSelector.Items.OfType<ComboBoxItem>())
             {
-                ThemeSelector.SelectedItem = item;
-                return;
+                if (item.Tag is string tag
+                    && Enum.TryParse<AppTheme>(tag, out var parsed)
+                    && parsed == theme)
+                {
+                    ThemeSelector.SelectedItem = item;
+                    return;
+                }
             }
         }
+        finally
+        {
+            _suppressThemePersist = false;
+        }
     }
+
+    /// <summary>
+    /// 抑制切换处理器中的配置写入。
+    /// </summary>
+    /// <remarks>
+    /// 用于程序化对齐下拉框（<see cref="SelectThemeItem"/>）的场景：
+    /// 那不是用户的选择，不应被当成偏好记录。
+    /// </remarks>
+    private bool _suppressThemePersist;
 
     /// <summary>
     /// 逐个解析语义色并生成色板。
@@ -167,6 +204,16 @@ public partial class MainWindow : Window
             && Enum.TryParse<AppTheme>(tag, out var theme))
         {
             ThemeManager.Apply(theme);
+
+            // 立即生效之外还要能跨会话保留 —— 否则用户的选择重启后就丢。
+            // 写入失败（磁盘只读等）不影响本次切换，TrySaveTheme 内部已吞掉异常。
+            //
+            // 程序化对齐下拉框时跳过：那不是用户的选择。
+            if (!_suppressThemePersist)
+            {
+                ThemeManager.TrySaveTheme(_paths.ConfigFile, theme);
+            }
+
             BuildColorSamples();
         }
     }
