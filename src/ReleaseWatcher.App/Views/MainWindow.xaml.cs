@@ -361,7 +361,7 @@ internal static class ThemeMetrics
     public static double SidebarCollapsedWidth => Read("Size.SidebarWidth.Collapsed", 52);
 
     /// <summary>
-    /// 导航项内边距（展开态）。收起态由代码置零，见 <c>ToggleSidebar_Click</c>。
+    /// 导航项内边距（展开态）。收起态由代码置零，见 <c>ApplySidebarState</c>。
     /// </summary>
     public static Thickness NavItemPadding
         => ReadThickness("Space.Padding.Horizontal.M", new Thickness(16, 0, 16, 0));
@@ -370,7 +370,7 @@ internal static class ThemeMetrics
     /// 导航图标与文字之间的间距。收起态由代码置零，否则图标会偏离中心。
     /// </summary>
     public static Thickness NavIconGap
-        => ReadThickness("Space.Margin.Right.S", new Thickness(0, 0, 8, 0));
+        => ReadThickness("Size.NavIconGap", new Thickness(0, 0, 16, 0));
 
     private static double Read(string key, double fallback)
     {

@@ -142,11 +142,19 @@
          布局尺寸（原文第 4.1 节）
          ============================================================ -->
 
+    <!--
+        Sidebar 展开宽度 = 200：对齐参考项目 BililiveRecorder 的
+        NavigationView OpenPaneLength，其导航项按 8px 网格排布。
+    -->
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-                x:Key="Size.SidebarWidth">220</sys:Double>
-    <!-- Sidebar 收起态宽度：仅容纳图标（Size.ControlHeight 32 + 两侧留白）。 -->
+                x:Key="Size.SidebarWidth">200</sys:Double>
+    <!--
+        Sidebar 收起态宽度 = 48：对应 WinUI NavigationView 的
+        CompactPaneLength 标准值（仅图标、图标居中）。
+        刻意不复用 Size.ControlHeight（32，那是输入框高度，不是导航项）。
+    -->
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-                x:Key="Size.SidebarWidth.Collapsed">52</sys:Double>
+                x:Key="Size.SidebarWidth.Collapsed">48</sys:Double>
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
                 x:Key="Size.ToolbarHeight">56</sys:Double>
 
@@ -156,6 +164,20 @@
         这是 Thickness 类型 —— WindowChrome.ResizeBorderThickness 要的正是它。
     -->
     <Thickness x:Key="Size.ResizeBorderThickness">6</Thickness>
+
+    <!--
+        导航项高度 = 40：WinUI NavigationView 的 item 标准高度。
+        刻意不复用 Size.ControlHeightLarge（36，那是输入框高度）。
+        导航项与输入框在 Fluent 规范里是两种不同的尺寸。
+    -->
+    <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                x:Key="Size.NavItemHeight">40</sys:Double>
+
+    <!--
+        导航图标与文字之间的间距 = 16。
+        Fluent 规范里图标与标签的水平间隙，与 8px 网格一致。
+    -->
+    <Thickness x:Key="Size.NavIconGap">0,0,16,0</Thickness>
 
     <!-- Content 内边距：原文 Horizontal 28~32 / Vertical 24~32，取下限偏保守 -->
     <Thickness x:Key="Size.ContentPadding">28,24</Thickness>

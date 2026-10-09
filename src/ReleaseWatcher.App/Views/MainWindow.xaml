@@ -37,16 +37,20 @@
     <Window.Resources>
 
         <!--
-            图标字形：统一用 Segoe MDL2 Assets。
+            图标字形：Segoe Fluent Icons 优先，回退 Segoe MDL2 Assets。
 
-            原写 "Segoe Fluent Icons, Segoe MDL2 Assets" 的回退列表，
-            但本机 Segoe Fluent Icons 未安装（SegFluentIcons.ttf 不存在），
-            回退首项缺失时字形渲染成"方框"（tofu）—— 2026-10-09 用户反馈
-            "按钮均为方框"。Segoe MDL2 Assets（segmdl2.ttf）Win10/11 均自带，
-            改用单一字体，不再依赖回退行为。
+            两者码点基本兼容（Fluent 是 MDL2 的更新版），
+            故优先取 Fluent 以获得更现代的图形，缺失时自动回退。
+            WPF FontFamily 支持逗号分隔的回退列表。
+
+            实测记录（2026-10-10）：本机 segmdl2.ttf 已安装
+            （内部 Family name 为 "Segoe MDL2 Assets"）；
+            Segoe Fluent Icons 未安装（无 SegFluentIcons.ttf）。
+            用户已计划安装该字体后再验收；
+            届时若两字体均已安装，将按列表优先渲染 Fluent 图形。
         -->
         <Style x:Key="IconGlyph" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
             <Setter Property="FontSize" Value="16" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <!--
@@ -91,11 +95,11 @@
         <Style x:Key="SidebarToggleButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Height" Value="{StaticResource Size.ControlHeightLarge}" />
-            <Setter Property="Margin" Value="{StaticResource Space.Margin.S}" />
+            <!-- 与导航项同高（40），让汉堡与下方图标左对齐成一列。 -->
+            <Setter Property="Height" Value="{StaticResource Size.NavItemHeight}" />
+            <Setter Property="Margin" Value="{StaticResource Space.Margin.XS}" />
             <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="HorizontalContentAlignment" Value="Center" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -173,8 +177,13 @@
             <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Height" Value="{StaticResource Size.ControlHeightLarge}" />
-            <Setter Property="Margin" Value="{StaticResource Space.Margin.S}" />
+            <!-- 导航项高度 40（Fluent 规范），不用输入框高度的 36。 -->
+            <Setter Property="Height" Value="{StaticResource Size.NavItemHeight}" />
+            <!--
+                外边距 4/内边距 16：贴近 Fluent NavigationView 的排布 ——
+                导航项之间紧凑（上下各 4），图标左侧留白 16。
+            -->
+            <Setter Property="Margin" Value="{StaticResource Space.Margin.XS}" />
             <Setter Property="Padding" Value="{StaticResource Space.Padding.Horizontal.M}" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="Cursor" Value="Hand" />
