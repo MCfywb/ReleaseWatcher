@@ -37,19 +37,72 @@
     <Window.Resources>
 
         <!--
-            导航图标：Segoe Fluent Icons（Win11）回退 Segoe MDL2 Assets（Win10）。
-            WPF FontFamily 支持逗号分隔的回退列表。
+            图标字形：统一用 Segoe MDL2 Assets。
+
+            原写 "Segoe Fluent Icons, Segoe MDL2 Assets" 的回退列表，
+            但本机 Segoe Fluent Icons 未安装（SegFluentIcons.ttf 不存在），
+            回退首项缺失时字形渲染成"方框"（tofu）—— 2026-10-09 用户反馈
+            "按钮均为方框"。Segoe MDL2 Assets（segmdl2.ttf）Win10/11 均自带，
+            改用单一字体，不再依赖回退行为。
         -->
-        <Style x:Key="NavIcon" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+        <Style x:Key="IconGlyph" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
             <Setter Property="FontSize" Value="16" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+
+        <!-- 导航图标：额外补图标与文字之间的间距（见 Sidebar 导航项）。 -->
+        <Style x:Key="NavIcon" TargetType="TextBlock"
+               BasedOn="{StaticResource IconGlyph}">
+            <Setter Property="Margin" Value="{StaticResource Space.Margin.Right.S}" />
+        </Style>
+
+        <!--
+            Sidebar 顶部的展开/收起按钮。
+            刻意不用 ChromeButton：后者带 IsHitTestVisibleInChrome，
+            那是给标题栏（非客户区）用的，客户区按钮不需要。
+        -->
+        <Style x:Key="SidebarToggleButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Height" Value="{StaticResource Size.ControlHeightLarge}" />
+            <Setter Property="Margin" Value="{StaticResource Space.Margin.S}" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ToggleBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ToggleBorder"
+                                        Property="Background"
+                                        Value="{DynamicResource Brush.Surface.Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ToggleBorder"
+                                        Property="Background"
+                                        Value="{DynamicResource Brush.Surface.Pressed}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!--
             标题栏窗口控制按钮（最小化 / 最大化 / 关闭）。
-            方形、无边框、hover 提亮 —— 贴近系统标题栏的观感。
+            无边框、hover 提亮 —— 贴近系统标题栏的观感。
             颜色全部走设计系统画刷。
+            内容用 IconGlyph 的 TextBlock 而非裸字符串：字体由 TextBlock 显式承担，
+            不依赖 Button 到 ContentPresenter 的字体继承。
         -->
         <Style x:Key="ChromeButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
@@ -57,8 +110,6 @@
             <Setter Property="Width" Value="46" />
             <Setter Property="Height" Value="{StaticResource Size.ToolbarHeight}" />
             <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
-            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
-            <Setter Property="FontSize" Value="10" />
             <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -158,45 +209,51 @@
                 Height="{StaticResource Size.ToolbarHeight}">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- 汉堡按钮：切换 Sidebar 展开/收起 -->
-                <Button Grid.Column="0"
-                        x:Name="HamburgerButton"
-                        Style="{StaticResource ChromeButton}"
-                        Width="{StaticResource Size.ToolbarHeight}"
-                        FontSize="14"
-                        Content="&#xE700;"
-                        Click="ToggleSidebar_Click"
-                        ToolTip="展开 / 收起侧边栏" />
-
-                <!-- 应用名：属于标题拖动区（不加 IsHitTestVisibleInChrome） -->
-                <TextBlock Grid.Column="1"
-                           Margin="{StaticResource Space.Margin.Right.S}"
+                <!--
+                    应用名：属于标题拖动区（不加 IsHitTestVisibleInChrome）。
+                    汉堡按钮已按用户要求移至 Sidebar 顶部，不占标题栏。
+                -->
+                <!--
+                    Margin 用 Space.Margin.*（Thickness），不用 Space.Padding.Horizontal.*
+                    —— "左右双向"的 padding 键用于 Margin 会让相邻元素间隙被翻倍，
+                    该规则由 PreviewPage_InterItemGapsMustUseRightOnlyMargin 守护。
+                -->
+                <TextBlock Grid.Column="0"
+                           Margin="{StaticResource Space.Margin.M}"
                            VerticalAlignment="Center"
                            Style="{StaticResource Text.CardTitle}"
                            Text="ReleaseWatcher" />
 
-                <!-- 窗口控制：最小化 / 最大化(还原) / 关闭 -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <!--
+                    窗口控制：最小化 / 最大化(还原) / 关闭。
+                    图标用 TextBlock 承载（字体由 IconGlyph 显式指定），
+                    不用裸字符串 Content —— 后者依赖字体继承，回退失败即显示方框。
+                -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <Button x:Name="MinimizeButton"
                             Style="{StaticResource ChromeButton}"
-                            Content="&#xE921;"
                             Click="Minimize_Click"
-                            ToolTip="最小化" />
+                            ToolTip="最小化">
+                        <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE921;" />
+                    </Button>
                     <Button x:Name="MaximizeButton"
                             Style="{StaticResource ChromeButton}"
-                            Content="&#xE922;"
                             Click="Maximize_Click"
-                            ToolTip="最大化" />
+                            ToolTip="最大化">
+                        <TextBlock x:Name="MaximizeIcon"
+                                   Style="{StaticResource IconGlyph}"
+                                   Text="&#xE922;" />
+                    </Button>
                     <Button x:Name="CloseButton"
                             Style="{StaticResource ChromeButton}"
-                            Content="&#xE8BB;"
                             Click="Close_Click"
-                            ToolTip="关闭" />
+                            ToolTip="关闭">
+                        <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE8BB;" />
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -220,6 +277,21 @@
                     BorderBrush="{DynamicResource Brush.Border.Subtle}"
                     BorderThickness="0,0,1,0">
                 <DockPanel LastChildFill="True">
+
+                    <!--
+                        汉堡按钮：按用户要求放在 Sidebar 顶部，不再占标题栏。
+                        用 SidebarToggleButton（无边框 + hover），
+                        不用 ChromeButton —— 后者带 IsHitTestVisibleInChrome，
+                        仅标题栏区域需要。
+                    -->
+                    <Button x:Name="HamburgerButton"
+                            DockPanel.Dock="Top"
+                            Style="{StaticResource SidebarToggleButton}"
+                            Click="ToggleSidebar_Click"
+                            ToolTip="展开 / 收起侧边栏">
+                        <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE700;" />
+                    </Button>
+
                     <!-- 设置项固定底部（与截图一致） -->
                     <RadioButton x:Name="SettingsNav"
                                  DockPanel.Dock="Bottom"
@@ -229,9 +301,10 @@
                                  Checked="Nav_Checked"
                                  ToolTip="设置">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Style="{StaticResource NavIcon}" Text="&#xE713;" />
+                            <TextBlock x:Name="SettingsIcon"
+                                           Style="{StaticResource NavIcon}"
+                                           Text="&#xE713;" />
                             <TextBlock x:Name="SettingsNavText"
-                                       Margin="{StaticResource Space.Margin.Right.S}"
                                        Text="设置" />
                         </StackPanel>
                     </RadioButton>
@@ -246,9 +319,10 @@
                                      Checked="Nav_Checked"
                                      ToolTip="概览">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource NavIcon}" Text="&#xE80F;" />
+                                <TextBlock x:Name="OverviewIcon"
+                                           Style="{StaticResource NavIcon}"
+                                           Text="&#xE80F;" />
                                 <TextBlock x:Name="OverviewNavText"
-                                           Margin="{StaticResource Space.Margin.Right.S}"
                                            Text="概览" />
                             </StackPanel>
                         </RadioButton>
@@ -260,9 +334,10 @@
                                      Checked="Nav_Checked"
                                      ToolTip="检测列表">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource NavIcon}" Text="&#xE71D;" />
+                                <TextBlock x:Name="ReposIcon"
+                                           Style="{StaticResource NavIcon}"
+                                           Text="&#xE71D;" />
                                 <TextBlock x:Name="ReposNavText"
-                                           Margin="{StaticResource Space.Margin.Right.S}"
                                            Text="检测列表" />
                             </StackPanel>
                         </RadioButton>
@@ -274,9 +349,10 @@
                                      Checked="Nav_Checked"
                                      ToolTip="下载">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource NavIcon}" Text="&#xE896;" />
+                                <TextBlock x:Name="DownloadsIcon"
+                                           Style="{StaticResource NavIcon}"
+                                           Text="&#xE896;" />
                                 <TextBlock x:Name="DownloadsNavText"
-                                           Margin="{StaticResource Space.Margin.Right.S}"
                                            Text="下载" />
                             </StackPanel>
                         </RadioButton>

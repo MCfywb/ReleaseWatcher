@@ -114,7 +114,9 @@ public partial class MainWindow : Window
     /// <summary>按窗口状态切换最大化按钮图标（最大化 ↔ 还原）。</summary>
     private void UpdateMaximizeIcon()
     {
-        MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        // 图标由 MaximizeIcon（TextBlock）承载，不设 Button.Content ——
+        // 避免依赖 Button 到 ContentPresenter 的字体继承（回退失败会显示方框）。
+        MaximizeIcon.Text = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
     }
 
     // ==================== Sidebar ====================
@@ -135,6 +137,26 @@ public partial class MainWindow : Window
         SidebarColumn.Width = new GridLength(_sidebarExpanded
             ? ThemeMetrics.SidebarWidth
             : ThemeMetrics.SidebarCollapsedWidth);
+
+        // 收起态必须同时去掉内边距并让内容居中，否则图标会被裁切：
+        // 收起宽度 52 − 外边距 8×2 − 内边距 16×2 = 仅剩 4px，放不下 16px 的图标
+        // （2026-10-09 用户反馈"点击汉堡菜单后图标显示不全"）。
+        var navPadding = _sidebarExpanded ? ThemeMetrics.NavItemPadding : new Thickness(0);
+        var alignment = _sidebarExpanded ? HorizontalAlignment.Left : HorizontalAlignment.Center;
+
+        foreach (var nav in new[] { OverviewNav, ReposNav, DownloadsNav, SettingsNav })
+        {
+            nav.Padding = navPadding;
+            nav.HorizontalContentAlignment = alignment;
+        }
+
+        // 收起时图标本身的右侧间距也要去掉 —— 那是给"图标+文字"组合用的，
+        // 只剩图标时留右边距会让图标偏离中心。
+        var iconMargin = _sidebarExpanded ? ThemeMetrics.NavIconGap : new Thickness(0);
+        foreach (var icon in new[] { OverviewIcon, ReposIcon, DownloadsIcon, SettingsIcon })
+        {
+            icon.Margin = iconMargin;
+        }
 
         // 文字随收起隐藏；图标保留。ToolTip 继续提供文字提示。
         var textVisibility = _sidebarExpanded ? Visibility.Visible : Visibility.Collapsed;
@@ -315,6 +337,18 @@ internal static class ThemeMetrics
     /// <summary>Sidebar 收起宽度（仅图标）。</summary>
     public static double SidebarCollapsedWidth => Read("Size.SidebarWidth.Collapsed", 52);
 
+    /// <summary>
+    /// 导航项内边距（展开态）。收起态由代码置零，见 <c>ToggleSidebar_Click</c>。
+    /// </summary>
+    public static Thickness NavItemPadding
+        => ReadThickness("Space.Padding.Horizontal.M", new Thickness(16, 0, 16, 0));
+
+    /// <summary>
+    /// 导航图标与文字之间的间距。收起态由代码置零，否则图标会偏离中心。
+    /// </summary>
+    public static Thickness NavIconGap
+        => ReadThickness("Space.Margin.Right.S", new Thickness(0, 0, 8, 0));
+
     private static double Read(string key, double fallback)
     {
         if (System.Windows.Application.Current?.TryFindResource(key) is double value)
@@ -324,6 +358,16 @@ internal static class ThemeMetrics
 
         // 读不到说明 Spacing.xaml 未被合并 —— 这本身是配置错误，
         // 但不应让应用崩溃，回退到原方案给的数值。
+        return fallback;
+    }
+
+    private static Thickness ReadThickness(string key, Thickness fallback)
+    {
+        if (System.Windows.Application.Current?.TryFindResource(key) is Thickness value)
+        {
+            return value;
+        }
+
         return fallback;
     }
 }
