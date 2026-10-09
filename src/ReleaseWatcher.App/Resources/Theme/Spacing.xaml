@@ -144,6 +144,9 @@
 
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
                 x:Key="Size.SidebarWidth">220</sys:Double>
+    <!-- Sidebar 收起态宽度：仅容纳图标（Size.ControlHeight 32 + 两侧留白）。 -->
+    <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                x:Key="Size.SidebarWidth.Collapsed">52</sys:Double>
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
                 x:Key="Size.ToolbarHeight">56</sys:Double>
 

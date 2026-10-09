@@ -6,17 +6,22 @@ using ReleaseWatcher.Application.Abstractions;
 namespace ReleaseWatcher.App.Views;
 
 /// <summary>
-/// 应用主页。
+/// 应用主页 —— 一体化标题栏 + 可收起 Sidebar。
 /// </summary>
 /// <remarks>
 /// <para>
-/// 2026-10-09 起本窗承载应用主界面；原设计系统预览内容已整体迁至
-/// <see cref="DesignSystemWindow"/>（独立窗口，由 Toolbar 的「设计系统」按钮打开）。
+/// 2026-10-09 按用户提供的截图重构布局：
+/// <list type="bullet">
+/// <item>无边框窗口（WindowChrome），标题栏与窗口一体：应用名 + 汉堡 + 窗口控制。</item>
+/// <item>Sidebar 可展开/收起，收起时只显示图标；设置项固定底部。</item>
+/// <item>主题选择移至「设置」页，不在主页。</item>
+/// </list>
 /// </para>
 /// <para>
-/// <b>当前状态：骨架已就位，内容待接。</b>
-/// 应用层检测用例（<c>ReleaseDetectionService</c>）已实现，
-/// 但界面尚未绑定任何数据 —— 本次刻意不做 UI，只把结构立起来。
+/// <b>WindowChrome 而非手写 DragMove：</b>WindowChrome 通过非客户区命中测试
+/// 保留边缘缩放、Win+方向键贴边、Aero Snap 等系统行为；
+/// <c>MouseLeftButtonDown + DragMove()</c> 的老办法会全部失去这些能力，
+/// 且拖动时窗口最大化状态还原等细节都要自己补 —— 不走这条路。
 /// </para>
 /// <para>
 /// <b>约束：不要在此类中 <c>using ReleaseWatcher.Infrastructure.*</c>。</b>
@@ -29,12 +34,10 @@ public partial class MainWindow : Window
     /// <summary>
     /// 路径提供者。用于取 <c>config.json</c> 路径以持久化主题选择。
     /// </summary>
-    /// <remarks>
-    /// 保存为字段是因为构造参数不会自动成为成员 ——
-    /// 而主题下拉框的 <see cref="ThemeSelector_SelectionChanged"/> 处理器
-    /// 需要在构造之后很久才拿到它。
-    /// </remarks>
     private readonly IAppPaths _paths;
+
+    /// <summary>Sidebar 当前是否展开。</summary>
+    private bool _sidebarExpanded = true;
 
     /// <summary>
     /// 设计系统窗口的当前实例。
@@ -53,9 +56,8 @@ public partial class MainWindow : Window
 
         _paths = paths;
 
-        // 标题中显示路径，用于验证 IAppPaths 已正确注入。
-        // 真实标题将随 i18n 落地后改为资源引用。
-        Title = $"ReleaseWatcher — {paths.AppDirectory}";
+        // Taskbar / Alt+Tab 仍需要窗口标题；标题栏上显示的应用名由 XAML 承担。
+        Title = "ReleaseWatcher";
 
         // 尺寸取自设计系统（Spacing.xaml），与原方案第 4.1 节一致。
         Width = ThemeMetrics.WindowWidth;
@@ -64,13 +66,111 @@ public partial class MainWindow : Window
         MinHeight = ThemeMetrics.WindowMinHeight;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
-        // 让下拉框反映当前实际主题，而不是硬编码第 0 项。
-        //
+        // 设置页「关于」区展示数据目录，替代原标题栏里的路径
+        // （标题栏现在只放应用名）。
+        AboutPathsText.Text = paths.AppDirectory;
+
+        // 让设置页的主题下拉框反映当前实际主题。
         // App.xaml.cs 在创建窗口前已应用 ResolveInitialTheme(paths.ConfigFile)，
-        // 此处若固定 SelectedIndex=0，显示就会与实际配色不符
-        // （系统为深色时下拉框却显示"浅色"）。
+        // 此处若固定 SelectedIndex=0，显示就会与实际配色不符。
         SelectThemeItem(ThemeManager.Current);
+
+        // 最大化 / 还原时更新标题栏按钮图标（E922 最大化 / E923 还原）。
+        StateChanged += (_, _) => UpdateMaximizeIcon();
     }
+
+    // ==================== 标题栏 ====================
+
+    /// <summary>最小化。</summary>
+    private void Minimize_Click(object sender, RoutedEventArgs e)
+        => WindowState = WindowState.Minimized;
+
+    /// <summary>最大化 / 还原切换。</summary>
+    private void Maximize_Click(object sender, RoutedEventArgs e)
+        => WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+
+    /// <summary>
+    /// 关闭窗口。
+    /// </summary>
+    /// <remarks>
+    /// ShutdownMode 为默认 OnLastWindowClose（D-049），
+    /// 最后一个窗口关闭即退出进程，无需额外处理。
+    /// </remarks>
+    private void Close_Click(object sender, RoutedEventArgs e)
+        => Close();
+
+    /// <summary>按窗口状态切换最大化按钮图标（最大化 ↔ 还原）。</summary>
+    private void UpdateMaximizeIcon()
+    {
+        MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+    }
+
+    // ==================== Sidebar ====================
+
+    /// <summary>
+    /// 展开 / 收起 Sidebar。
+    /// </summary>
+    /// <remarks>
+    /// 收起时只显示图标（ToolTip 仍有文字提示），宽度切换到
+    /// <c>Size.SidebarWidth.Collapsed</c>。
+    /// 刻意不做动画：宽度动画涉及计时器与布局抖动，
+    /// 等布局稳定后再考虑（先要"能用"，再要"好看"）。
+    /// </remarks>
+    private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
+    {
+        _sidebarExpanded = !_sidebarExpanded;
+
+        SidebarColumn.Width = new GridLength(_sidebarExpanded
+            ? ThemeMetrics.SidebarWidth
+            : ThemeMetrics.SidebarCollapsedWidth);
+
+        // 文字随收起隐藏；图标保留。ToolTip 继续提供文字提示。
+        var textVisibility = _sidebarExpanded ? Visibility.Visible : Visibility.Collapsed;
+        OverviewNavText.Visibility = textVisibility;
+        ReposNavText.Visibility = textVisibility;
+        DownloadsNavText.Visibility = textVisibility;
+        SettingsNavText.Visibility = textVisibility;
+
+        StatusText.Text = _sidebarExpanded ? "侧边栏已展开" : "侧边栏已收起";
+    }
+
+    /// <summary>
+    /// 导航切换：按 Tag 显示对应页面。
+    /// </summary>
+    /// <remarks>
+    /// 页面是 MainWindow 内的四个 Grid，切换可见性而非导航框架 ——
+    /// 四页内容都很轻，无需 Frame/Page 的历史栈机制。
+    /// Tag 决定目标页，避免靠控件名硬编码分支顺序。
+    /// </remarks>
+    private void Nav_Checked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not RadioButton nav || nav.Tag is not string tag)
+        {
+            return;
+        }
+
+        ShowPage(tag switch
+        {
+            "Overview" => OverviewPage,
+            "Repos" => ReposPage,
+            "Downloads" => DownloadsPage,
+            "Settings" => SettingsPage,
+            _ => OverviewPage,
+        });
+    }
+
+    /// <summary>只显示指定页，其余隐藏。</summary>
+    private void ShowPage(UIElement page)
+    {
+        OverviewPage.Visibility = page == OverviewPage ? Visibility.Visible : Visibility.Collapsed;
+        ReposPage.Visibility = page == ReposPage ? Visibility.Visible : Visibility.Collapsed;
+        DownloadsPage.Visibility = page == DownloadsPage ? Visibility.Visible : Visibility.Collapsed;
+        SettingsPage.Visibility = page == SettingsPage ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ==================== 设置页 ====================
 
     /// <summary>
     /// 打开设计系统手册窗口。
@@ -78,18 +178,14 @@ public partial class MainWindow : Window
     /// <remarks>
     /// 用 <see cref="Show()"/> 而非 <see cref="ShowDialog()"/>：
     /// 手册需要与主页并排对照，模态对话框会挡住另一边。
-    /// 单例复用已存在的实例，避免反复点击开出一堆窗口。
     /// </remarks>
     private void OpenDesignSystem_Click(object sender, RoutedEventArgs e)
     {
-        if (_designSystemWindow is not null)
+        if (_designSystemWindow is not null && _designSystemWindow.IsVisible)
         {
             // 已开则前置，不重复创建
-            if (_designSystemWindow.IsVisible)
-            {
-                _designSystemWindow.Activate();
-                return;
-            }
+            _designSystemWindow.Activate();
+            return;
         }
 
         _designSystemWindow = new DesignSystemWindow(_paths);
@@ -189,6 +285,12 @@ internal static class ThemeMetrics
     public static double WindowMinWidth => Read("Size.WindowMinWidth", 1200);
 
     public static double WindowMinHeight => Read("Size.WindowMinHeight", 760);
+
+    /// <summary>Sidebar 展开宽度。</summary>
+    public static double SidebarWidth => Read("Size.SidebarWidth", 220);
+
+    /// <summary>Sidebar 收起宽度（仅图标）。</summary>
+    public static double SidebarCollapsedWidth => Read("Size.SidebarWidth.Collapsed", 52);
 
     private static double Read(string key, double fallback)
     {
