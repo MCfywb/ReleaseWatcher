@@ -1,0 +1,41 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ReleaseWatcher 领域层单元测试项目
+    ============================================================
+    职责：测试 Domain 中的值对象、实体与纯领域规则。
+
+    引用策略（D-040）：
+      必须引用 ReleaseWatcher.Domain —— 否则拿不到真实类型。
+      只允许引用 Domain 本身，不引用 Application / Infrastructure / App：
+      Domain 是依赖链底端，引用下游会让测试失去"领域规则可独立验证"的意义；
+      引用 App 会把 WPF 拖进测试进程。
+      该约束由 LayeringTests 按规则守护，不靠本文档自觉遵守。
+
+    Domain 层零外部依赖，因此本项目无需任何替身（Fakes）：
+    纯函数式测试，不需要 I/O。这正是规则放在 Domain 的收益。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ReleaseWatcher.Domain\ReleaseWatcher.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
