@@ -69,13 +69,45 @@ public sealed class RepositoryConventionTests
         Assert.Contains("exit /b 1", script, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// <c>build.cmd clean</c> 必须真正删除 <c>bin</c> 与 <c>obj</c>，而非只调用 <c>dotnet clean</c>。
+    /// </summary>
+    /// <remarks>
+    /// AGENTS.md 1.6.1（D-048）：交给用户验收前必须 clean + build，
+    /// 且产物须可证明来自当前源码。
+    /// <para>
+    /// <c>dotnet clean</c> 只清中间产物，**保留已构建的 EXE**。
+    /// 仅执行 <c>dotnet clean</c> + <c>build</c> 时，
+    /// 上一次残留的 EXE 可能被复用，或本次构建未重新生成输出，
+    /// 于是用户启动到旧产物 —— 表现为"代码改了但界面没变"，极难归因。
+    /// </para>
+    /// <para>
+    /// 本断言检查脚本里存在显式删除 bin/obj 的逻辑。
+    /// 它不验证实际删除效果（那需要真实文件系统状态变化），
+    /// 只保证规则没有在文本层面被悄悄删掉。
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void BuildScript_CleanMustRemoveBinAndObj()
+    {
+        var script = File.ReadAllText(Path.Combine(SolutionRoot, "build.cmd"));
+
+        var mentionsBin = script.Contains("\"bin\"") || script.Contains("==\"bin\"");
+        var mentionsObj = script.Contains("\"obj\"") || script.Contains("==\"obj\"");
+
+        Assert.True(mentionsBin, "build.cmd clean 未提及删除 bin 目录。");
+        Assert.True(mentionsObj, "build.cmd clean 未提及删除 obj 目录。");
+        Assert.True(
+            script.Contains("rmdir", StringComparison.OrdinalIgnoreCase),
+            "build.cmd clean 应使用 rmdir /s /q 删除 bin 与 obj。");
+    }
+
     [Theory]
     [InlineData("build")]
     [InlineData("test")]
     [InlineData("clean")]
     [InlineData("sdk")]
-    public void BuildScript_MustNotRunDotnetInsideParentheticalBlock(string subcommand)
-    {
+    public void BuildScript_MustNotRunDotnetInsideParentheticalBlock(string subcommand)    {
         // 曾因把子命令写成 if (...) ( ... exit /b %ERRORLEVEL% ) 而埋下严重缺陷：
         // cmd.exe 在**解析**括号块时就展开 %ERRORLEVEL%，此时 dotnet 尚未执行，
         // 拿到的是上一条命令的旧值 0 —— 于是无论构建或测试是否失败，
