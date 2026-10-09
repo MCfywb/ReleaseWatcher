@@ -70,6 +70,16 @@ public partial class MainWindow : Window
         // （标题栏现在只放应用名）。
         AboutPathsText.Text = paths.AppDirectory;
 
+        // Sidebar 初始宽度：必须在代码里设。
+        // ColumnDefinition.Width 是 GridLength，而 Size.SidebarWidth 是 sys:Double，
+        // 在 XAML 里直接绑定会抛 XamlParseException（编译期不报错，只在启动时崩）。
+        SidebarColumn.Width = new GridLength(ThemeMetrics.SidebarWidth);
+
+        // 初始页：XAML 里 IsChecked="True" 触发的 Checked 事件发生在解析期间，
+        // 已被 Nav_Checked 的 null 保护忽略，故此处在 InitializeComponent()
+        // 之后显式设置一次。
+        ShowPage(OverviewPage);
+
         // 让设置页的主题下拉框反映当前实际主题。
         // App.xaml.cs 在创建窗口前已应用 ResolveInitialTheme(paths.ConfigFile)，
         // 此处若固定 SelectedIndex=0，显示就会与实际配色不符。
@@ -147,6 +157,19 @@ public partial class MainWindow : Window
     private void Nav_Checked(object sender, RoutedEventArgs e)
     {
         if (sender is not RadioButton nav || nav.Tag is not string tag)
+        {
+            return;
+        }
+
+        // XAML 里 IsChecked="True" 的导航项会在 InitializeComponent() 解析期间
+        // 就触发 Checked 事件，此时其余页面控件尚未创建（它们声明在导航之后）。
+        // 不判断就直接切换可见性会抛 NullReferenceException ——
+        // 编译期不报错，只在启动时崩，表现为"exe 打不开"。
+        // 初始页由构造函数在 InitializeComponent() 之后显式设置。
+        if (OverviewPage is null
+            || ReposPage is null
+            || DownloadsPage is null
+            || SettingsPage is null)
         {
             return;
         }

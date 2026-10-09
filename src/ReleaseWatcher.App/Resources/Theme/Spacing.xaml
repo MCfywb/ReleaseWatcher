@@ -150,6 +150,13 @@
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
                 x:Key="Size.ToolbarHeight">56</sys:Double>
 
+    <!--
+        可缩放边框：无边框窗口下鼠标抓握的边缘宽度。
+        刻意不同于 Size.BorderThickness（那只是 1px 描边，太窄抓不住）。
+        这是 Thickness 类型 —— WindowChrome.ResizeBorderThickness 要的正是它。
+    -->
+    <Thickness x:Key="Size.ResizeBorderThickness">6</Thickness>
+
     <!-- Content 内边距：原文 Horizontal 28~32 / Vertical 24~32，取下限偏保守 -->
     <Thickness x:Key="Size.ContentPadding">28,24</Thickness>
 
