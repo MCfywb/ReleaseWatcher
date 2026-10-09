@@ -540,6 +540,149 @@ public sealed class DesignSystemTests
             + string.Join(" | ", offenders.Distinct().Take(5)));
     }
 
+    /// <summary>
+    /// 可点击控件的模板必须包含承载命中测试的 <c>Border</c>。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>真实故障</b>：用户反馈"下拉框无法拉出"。
+    /// 根因是 <c>ComboBox.Toggle</c> 的模板里只有一个 <c>Path</c>（箭头图形），
+    /// 而图形只在自己那10×6 的像素范围内参与命中测试 ——
+    /// 点控件其余位置毫无反应，表现为"点击没反应、下拉拉不开"。
+    /// </para>
+    /// <para>
+    /// <b>修法</b>：模板里加一个铺满的透明 <c>Border</c> 承载命中。
+    /// <c>Panel</c> 本身不参与命中测试，<c>Border</c> 才是承载元素；
+    /// 且必须设<code>Background="Transparent"</code>，
+    /// 完全不设 Background 则连透明区域也不命中。
+    /// </para>
+    /// <para>
+    /// <b>为什么必须用测试守护</b>：这类缺陷编译期完全正常，
+    /// 且外观看不出异常（箭头画得好好的），只能靠真实点击发现。
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("ComboBox.Toggle")]
+    public void ToggleTemplate_MustContainHitTestCarrier(string styleKey)
+    {
+        var path = Path.Combine(AppProjectRoot(), ThemeDirectory, "Controls.xaml");
+        var content = File.ReadAllText(path);
+
+        // 提取该样式的模板部分
+        var styleMatch = Regex.Match(
+            content,
+            $@"x:Key=""{Regex.Escape(styleKey)}""[\s\S]*?</Style>",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(2));
+
+        Assert.True(
+            styleMatch.Success,
+            $"Controls.xaml 中未找到样式 {styleKey} —— 模板结构可能已变，请同步更新本断言。");
+
+        var template = styleMatch.Value;
+
+        // 必须有 Border 承载命中测试
+        Assert.True(
+            template.Contains("<Border", StringComparison.Ordinal),
+            $"{styleKey} 的模板中没有 Border。图形元素（如 Path）只在自己占据的像素范围"
+            + "参与命中测试，点控件其余位置不会有反应 —— 表现为\"点击无响应\"。"
+            + "需加一个铺满的透明 Border 承载命中测试。");
+    }
+
+    [Fact]
+    public void ComboBoxToggle_BorderShouldBeTransparentAndFill()
+    {
+        var path = Path.Combine(AppProjectRoot(), ThemeDirectory, "Controls.xaml");
+        var content = File.ReadAllText(path);
+
+        var styleMatch = Regex.Match(
+            content,
+            @"x:Key=""ComboBox\.Toggle""[\s\S]*?</Style>",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(2));
+
+        Assert.True(styleMatch.Success, "未找到 ComboBox.Toggle 样式");
+
+        var template = styleMatch.Value;
+
+        // 承载命中的 Border 必须有透明背景，否则不参与命中测试
+        Assert.True(
+            Regex.IsMatch(template, @"<Border[^>]*Background\s*=\s*""Transparent"""),
+            "ComboBox.Toggle 的 Border 未设 Background=\"Transparent\"。"
+            + "完全透明（不设Background）的 Border 同样不参与命中测试，"
+            + "结果仍是点击无响应。");
+
+        // 不能只放Path —— 那正是本次故障的成因
+        var borderBlock = Regex.Match(
+            template,
+            @"<Border[\s\S]*?</Border>",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(2));
+
+        Assert.True(borderBlock.Success, "ComboBox.Toggle 中未找到 Border");
+        Assert.True(
+            borderBlock.Value.Contains("Transparent", StringComparison.Ordinal),
+            "承载命中测试的 Border 内没有透明背景 —— 它必须铺满整个控件才能接住点击。");
+    }
+
+    [Fact]
+    public void ThemeManager_ShouldSupportSystemTheme()
+    {
+        // 用户要求"深色模式跟随系统"，属已确认功能。
+        // 缺 System 取值意味着该功能回退为硬编码。
+        var path = Path.Combine(AppProjectRoot(), "Services", "ThemeManager.cs");
+        var content = File.ReadAllText(path);
+
+        Assert.Contains("System", content, StringComparison.Ordinal);
+
+        // 必须读注册表项，不能靠 SystemParameters
+        Assert.True(
+            content.Contains("AppsUseLightTheme", StringComparison.Ordinal),
+            "未读取 AppsUseLightTheme 注册表值 —— 那是 Windows 10/11"
+            + "「设置 → 个性化 → 应用模式」真正写入的位置。");
+
+        // 缺省值应为 System（跟随系统）
+        Assert.True(
+            Regex.IsMatch(content, @"ResolveInitialTheme\(\)\s*=>\s*AppTheme\.System"),
+            "ResolveInitialTheme 的缺省应为 AppTheme.System（跟随系统），"
+            + "当前应用户选了\"跟随系统\"，若固定为 Light/Dark 则该选项无意义。");
+    }
+
+    [Fact]
+    public void ThemeEnum_ShouldContainAllThreeOptions()
+    {
+        // 三个取值都要有：跟随系统 / 浅色 / 深色
+        var path = Path.Combine(AppProjectRoot(), "Services", "ThemeManager.cs");
+        var content = File.ReadAllText(path);
+
+        var enumMatch = Regex.Match(
+            content,
+            @"public enum AppTheme\s*\{[\s\S]*?\}",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(2));
+
+        Assert.True(enumMatch.Success, "未找到 AppTheme 枚举");
+
+        var body = enumMatch.Value;
+
+        foreach (var member in new[] { "Light", "Dark", "System" })
+        {
+            Assert.True(
+                body.Contains(member, StringComparison.Ordinal),
+                $"AppTheme 枚举缺少 {member} 取值。");
+        }
+    }
+
+    [Fact]
+    public void PreviewPage_ShouldOfferSystemThemeOption()
+    {
+        // 预览页是验证主题切换的入口，缺少"跟随系统"选项则无法验证该功能。
+        var path = Path.Combine(AppProjectRoot(), "Views", "MainWindow.xaml");
+        var content = File.ReadAllText(path);
+
+        Assert.Contains("Tag=\"System\"", content, StringComparison.Ordinal);
+    }
+
     /// <summary>App 项目根目录。</summary>
     private static string AppProjectRoot()
         => Path.Combine(SolutionLayout.SolutionRoot, "src", "ReleaseWatcher.App");
