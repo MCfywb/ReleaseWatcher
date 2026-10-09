@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ReleaseWatcher 应用层单元测试项目
+    ============================================================
+    职责：测试 Application 中的用例编排。
+
+    引用策略（D-040，与 Domain.Tests 同理）：
+      必须引用 ReleaseWatcher.Application —— 否则拿不到被测类型。
+      只能再引用 ReleaseWatcher.Domain（Application 的下游分层），
+      不可引用 Infrastructure 或 App：
+        引用 Infrastructure 会让用例测试依赖真实数据来源，丧失隔离性；
+        引用 App 会把 WPF 拖进测试进程。
+      该约束由 LayeringTests 按规则守护，不靠本文档自觉遵守。
+
+    用 Fake 而非 Mock：IReleaseFeed 只有一个方法、语义清晰，
+    手写替身比引入 Moq 更直白，也少一个依赖。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ReleaseWatcher.Application\ReleaseWatcher.Application.csproj" />
+  </ItemGroup>
+
+</Project>
