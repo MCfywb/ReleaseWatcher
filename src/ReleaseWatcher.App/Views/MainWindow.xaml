@@ -46,7 +46,7 @@
 
                 <!-- 主题切换：验证深浅两套色板与 DynamicResource 是否真的生效 -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Margin="{StaticResource Space.Padding.Horizontal.S}"
+                    <TextBlock Margin="{StaticResource Space.Margin.Right.S}"
                                VerticalAlignment="Center"
                                Style="{StaticResource Text.Secondary}"
                                Text="主题" />
@@ -103,27 +103,27 @@
 
                 <!-- Button 三态：正常 / 悬停 / 禁用 -->
                 <StackPanel Margin="{StaticResource Space.Padding.Top.M}" Orientation="Horizontal">
-                    <Button Margin="{StaticResource Space.Padding.Horizontal.S}" Content="Primary" Style="{StaticResource Button.Primary}" />
-                    <Button Margin="{StaticResource Space.Padding.Horizontal.S}" Content="Secondary" />
-                    <Button Margin="{StaticResource Space.Padding.Horizontal.S}" Content="Disabled" IsEnabled="False" />
+                    <Button Margin="{StaticResource Space.Margin.Right.S}" Content="Primary" Style="{StaticResource Button.Primary}" />
+                    <Button Margin="{StaticResource Space.Margin.Right.S}" Content="Secondary" />
+                    <Button Content="Disabled" IsEnabled="False" />
                 </StackPanel>
 
                 <!-- TextBox 三态 -->
                 <StackPanel Margin="{StaticResource Space.Padding.Top.M}" Orientation="Horizontal">
-                    <TextBox Width="200" Margin="{StaticResource Space.Padding.Horizontal.S}" Text="Normal" />
-                    <TextBox Width="200" Margin="{StaticResource Space.Padding.Horizontal.S}" Text="Focused" />
+                    <TextBox Width="200" Margin="{StaticResource Space.Margin.Right.S}" Text="Normal" />
+                    <TextBox Width="200" Margin="{StaticResource Space.Margin.Right.S}" Text="Focused" />
                     <TextBox Width="200" Text="Disabled" IsEnabled="False" />
                 </StackPanel>
 
                 <!-- ComboBox 与 CheckBox -->
                 <StackPanel Margin="{StaticResource Space.Padding.Top.M}" Orientation="Horizontal">
-                    <ComboBox Width="180" Margin="{StaticResource Space.Padding.Horizontal.L}">
+                    <ComboBox Width="180" Margin="{StaticResource Space.Margin.Right.S}">
                         <ComboBoxItem Content="跟随系统" />
                         <ComboBoxItem Content="浅色" />
                         <ComboBoxItem Content="深色" />
                     </ComboBox>
-                    <CheckBox Margin="{StaticResource Space.Padding.Horizontal.S}" Content="已选中" IsChecked="True" />
-                    <CheckBox Margin="{StaticResource Space.Padding.Horizontal.S}" Content="未选中" />
+                    <CheckBox Margin="{StaticResource Space.Margin.Right.S}" Content="已选中" IsChecked="True" />
+                    <CheckBox Margin="{StaticResource Space.Margin.Right.S}" Content="未选中" />
                     <CheckBox Content="已禁用" IsEnabled="False" />
                 </StackPanel>
 
@@ -170,42 +170,42 @@
                     这样预览页不是"写着 4"，而是"画出来就是 4"。
                 -->
                 <StackPanel Orientation="Horizontal">
-                    <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
+                    <StackPanel Margin="{StaticResource Space.Margin.Right.M}">
                         <Border Width="{StaticResource Size.Space.XS}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="XS 4" />
                     </StackPanel>
 
-                    <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
+                    <StackPanel Margin="{StaticResource Space.Margin.Right.M}">
                         <Border Width="{StaticResource Size.Space.S}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="S 8" />
                     </StackPanel>
 
-                    <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
+                    <StackPanel Margin="{StaticResource Space.Margin.Right.M}">
                         <Border Width="{StaticResource Size.Space.M}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="M 16" />
                     </StackPanel>
 
-                    <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
+                    <StackPanel Margin="{StaticResource Space.Margin.Right.M}">
                         <Border Width="{StaticResource Size.Space.L}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="L 24" />
                     </StackPanel>
 
-                    <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
+                    <StackPanel Margin="{StaticResource Space.Margin.Right.M}">
                         <Border Width="{StaticResource Size.Space.XL}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
                         <TextBlock Margin="{StaticResource Space.Padding.Top.XS}" Style="{StaticResource Text.Caption}" Text="XL 32" />
                     </StackPanel>
 
-                    <StackPanel Margin="{StaticResource Space.Padding.Horizontal.M}">
+                    <StackPanel Margin="{StaticResource Space.Margin.Right.M}">
                         <Border Width="{StaticResource Size.Space.2XL}" Height="24"
                                 HorizontalAlignment="Left"
                                 Background="{DynamicResource Brush.Accent}" />
@@ -240,7 +240,7 @@
                            Text="圆角" />
 
                 <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
-                    <Border Width="120" Height="56" Margin="{StaticResource Space.Padding.Horizontal.S}"
+                    <Border Width="120" Height="56" Margin="{StaticResource Space.Margin.Right.S}"
                             Background="{DynamicResource Brush.Surface}"
                             BorderBrush="{DynamicResource Brush.Border}"
                             BorderThickness="1"
@@ -248,7 +248,7 @@
                         <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
                                    Style="{StaticResource Text.Caption}" Text="Card 12" />
                     </Border>
-                    <Border Width="120" Height="56" Margin="{StaticResource Space.Padding.Horizontal.S}"
+                    <Border Width="120" Height="56" Margin="{StaticResource Space.Margin.Right.S}"
                             Background="{DynamicResource Brush.Surface}"
                             BorderBrush="{DynamicResource Brush.Border}"
                             BorderThickness="1"
@@ -276,19 +276,19 @@
                            Text="原方案要求：不靠颜色单独传达状态。例：新版本应为蓝点 + NEW 文字，而非整块红色。" />
 
                 <StackPanel Orientation="Horizontal">
-                    <Border Margin="{StaticResource Space.Padding.Horizontal.S}" Padding="12,4"
+                    <Border Margin="{StaticResource Space.Margin.Right.S}" Padding="12,4"
                             Background="{DynamicResource Brush.Accent}"
                             CornerRadius="{StaticResource Radius.Badge}">
                         <TextBlock Foreground="{DynamicResource Brush.Text.OnAccent}"
                                    Style="{StaticResource Text.Caption}" Text="NEW" />
                     </Border>
-                    <Border Margin="{StaticResource Space.Padding.Horizontal.S}" Padding="12,4"
+                    <Border Margin="{StaticResource Space.Margin.Right.S}" Padding="12,4"
                             Background="{DynamicResource Brush.Success}"
                             CornerRadius="{StaticResource Radius.Badge}">
                         <TextBlock Foreground="{DynamicResource Brush.Text.OnAccent}"
                                    Style="{StaticResource Text.Caption}" Text="已完成" />
                     </Border>
-                    <Border Margin="{StaticResource Space.Padding.Horizontal.S}" Padding="12,4"
+                    <Border Margin="{StaticResource Space.Margin.Right.S}" Padding="12,4"
                             Background="{DynamicResource Brush.Warning}"
                             CornerRadius="{StaticResource Radius.Badge}">
                         <TextBlock Foreground="{DynamicResource Brush.Text.OnAccent}"

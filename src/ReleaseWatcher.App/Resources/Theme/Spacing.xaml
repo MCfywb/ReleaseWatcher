@@ -86,6 +86,29 @@
     <Thickness x:Key="Space.Padding.Horizontal.XL">32,0</Thickness>
 
     <!--
+        仅右侧留白（Left=0, Right=N），用于水平 StackPanel 中**相邻元素之间的间隙**。
+
+        ⚠️ 为什么必须有这个键，而不是复用在 `Space.Padding.Horizontal.*`：
+
+        `Space.Padding.Horizontal.S` = "8,0"，按 Thickness 语义是
+        **左右各 8**（Left=8, Right=8）。若把它同时赋给两个相邻元素，
+        间隙 = 左元素的 Right(8) + 右元素的 Left(8) = **16**，是预期的两倍；
+        更糟的是，若最后一个元素没赋（常见写法），间隙就变成 16 与 8 交替 ——
+        用户肉眼可见"三个框间距不一样"。
+
+        这是 2026-10-09 实际发生并修复的故障（见 DECISIONS.md D-046 第 11 条）。
+        结论：水平 StackPanel 内的**元素间间隙**必须用右侧单边键，
+        且只赋给"除最后一个外的每个元素"，才能保证间隙正好 = N 且处处相等。
+
+        `Space.Padding.Horizontal.*` 此后只用于控件**内部**的左右内边距
+        （Button / ComboBox 的 Padding），不得用于元素之间的 Margin。
+    -->
+    <Thickness x:Key="Space.Margin.Right.S">0,0,8,0</Thickness>
+    <Thickness x:Key="Space.Margin.Right.M">0,0,16,0</Thickness>
+    <Thickness x:Key="Space.Margin.Right.L">0,0,24,0</Thickness>
+    <Thickness x:Key="Space.Margin.Right.XL">0,0,32,0</Thickness>
+
+    <!--
         纵向留白、横向为 0。UI 中最常用的一类：
         元素之间的上下间距。
     -->
