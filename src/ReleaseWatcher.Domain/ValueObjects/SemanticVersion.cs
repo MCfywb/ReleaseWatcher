@@ -145,10 +145,37 @@ public sealed class SemanticVersion : IComparable<SemanticVersion>, IEquatable<S
 
     private static readonly string[] KnownPrefixes = ["v", "release-", "release/", "releases/", "rel-"];
 
+    /// <summary>
+    /// 单段纯数字且长度达到该值时，判定为日期串而非版本号。
+    /// </summary>
+    /// <remarks>
+    /// <b>为什么需要这道防护：</b><c>20241015</c> 这类日期 tag 在形式上是合法的
+    /// 单段数字（major = 20241015），若直接放行，它会大于任何正常版本号
+    /// （如 <c>1.2.3</c>），导致检测永远判定"有更新"且反复提示。
+    /// 真实的语义化版本 major 不会达到 8 位，因此用长度作为判据：
+    /// 既拦下常见日期格式，又不会误伤 <c>99999999</c> 之类虽不常见但合法的版本号。
+    /// </remarks>
+    private const int DateLikeSegmentLength = 8;
+
     private static bool TryParseSegment(string segment, out int value)
-        => int.TryParse(segment, System.Globalization.NumberStyles.None,
-            System.Globalization.CultureInfo.InvariantCulture, out value)
-           && value >= 0;
+    {
+        if (!int.TryParse(segment, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out value)
+            || value < 0)
+        {
+            value = 0;
+            return false;
+        }
+
+        // 单一数字段且长到像日期 → 拒绝
+        if (segment.Length >= DateLikeSegmentLength && segment.All(char.IsAsciiDigit))
+        {
+            value = 0;
+            return false;
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// 按语义化版本的优先级规则比较两个版本。
