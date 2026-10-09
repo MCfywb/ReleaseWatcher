@@ -64,7 +64,33 @@ public partial class MainWindow : Window
 
         BuildColorSamples();
 
-        ThemeSelector.SelectedIndex = 0;
+        // 让下拉框反映当前实际主题，而不是硬编码第 0 项。
+        //
+        // App.xaml.cs 在创建窗口前已应用 ResolveInitialTheme()，
+        // 此处若固定 SelectedIndex=0，显示就会与实际配色不符
+        // （系统为深色时下拉框却显示"浅色"）。
+        SelectThemeItem(ThemeManager.Current);
+    }
+
+    /// <summary>
+    /// 把主题下拉框选中项对齐到指定主题。
+    /// </summary>
+    /// <remarks>
+    /// 用 Tag 匹配而非索引 —— 下拉框项的顺序属于展示细节，
+    /// 用索引绑定会在调整顺序后静默错位。
+    /// </remarks>
+    private void SelectThemeItem(AppTheme theme)
+    {
+        foreach (var item in ThemeSelector.Items.OfType<ComboBoxItem>())
+        {
+            if (item.Tag is string tag
+                && Enum.TryParse<AppTheme>(tag, out var parsed)
+                && parsed == theme)
+            {
+                ThemeSelector.SelectedItem = item;
+                return;
+            }
+        }
     }
 
     /// <summary>

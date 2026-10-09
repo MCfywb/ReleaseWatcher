@@ -76,28 +76,69 @@ public static class ThemeManager
     /// <summary>当前生效的主题。</summary>
     public static AppTheme Current { get; private set; } = AppTheme.Light;
 
+    /// <summary>读取系统当前的深浅色偏好。</summary>
+    /// <remarks>
+    /// 数据来源是 <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize</c>
+    /// 的 <c>AppsUseLightTheme</c>（DWORD）：
+    /// <list type="bullet">
+    /// <item>1 = 浅色（默认 / 键缺失）</item>
+    /// <item>0 = 深色</item>
+    /// </list>
+    /// <para>
+    /// 选它的原因：这是 Windows 10/11「设置 → 个性化 → 应用模式」
+    /// 真正写入的位置，与用户在那里看到的选项是同一个值。
+    /// 读注册表比调<code>SystemParameters</code> 更直接 ——
+    /// 后者反映的是系统 UI 主题，不一定与应用模式一致。
+    /// </para>
+    /// <para>
+    /// 读取失败（组策略锁定、非标准环境）时**退回浅色**而不是抛异常：
+    /// 主题选择属偏好而非核心功能，不该导致应用无法启动。
+    /// </para>
+    /// </remarks>
+    public static AppTheme ReadSystemTheme()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+
+            // 键或值缺失时 Windows 使用浅色，这是系统自身的行为
+            if (key?.GetValue("AppsUseLightTheme") is int lightTheme)
+            {
+                return lightTheme != 0 ? AppTheme.Light : AppTheme.Dark;
+            }
+
+            return AppTheme.Light;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            // 注册表不可读 —— 用缺省值继续，不让主题偏好成为启动障碍
+            return AppTheme.Light;
+        }
+    }
+
     /// <summary>
     /// 确定初始主题。
     /// </summary>
     /// <remarks>
     /// 原方案未定义深色主题，本轮补齐（见 Colors.Dark.xaml 头部说明）。
     /// <para>
-    /// 当前**固定返回浅色**，不是偷懒的实现：
-    /// "跟随系统"需要读取系统配色偏好，而设置项尚未实现
-    /// （<c>config.json</c> 的 <c>appearance.theme</c> 属Settings 页范围）。
-    /// 在此凭空引入一套系统偏好探测，会产生一个无处持久化、
-    /// 下次启动就失效的行为 —— 反而更难排查。
+    /// 当前固定为<see cref="AppTheme.System"/>（跟随系统）：
+    /// 这是最不需要用户决策的缺省值，也让深色主题在系统切到深色时自动生效。
     /// </para>
     /// <para>
-    /// 实现设置页后，此处改为读 <c>config.json</c>。
+    /// <b>尚未持久化</b>：真正的用户偏好应存进
+    /// <c>config.json</c> 的 <c>appearance.theme</c>，属Settings 页范围。
+    /// 本轮只实现"跟随系统"这一个可用取值，
+    /// 等设置页就绪后再改为读配置（配置缺失时仍回落到本方法）。
     /// </para>
     /// </remarks>
-    public static AppTheme ResolveInitialTheme() => AppTheme.Light;
+    public static AppTheme ResolveInitialTheme() => AppTheme.System;
 
     /// <summary>
     /// 应用指定主题。
     /// </summary>
-    /// <param name="theme">目标主题。</param>
+    /// <param name="theme">目标主题；传 <see cref="AppTheme.System"/> 会解析为系统当前值。</param>
     /// <exception cref="InvalidOperationException">
     /// 应用资源中找不到 <c>Theme.xaml</c>，或其内部缺少色板槽位 ——
     /// 通常意味着 <c>App.xaml</c> 未引用它，或合并顺序被改动。
@@ -113,10 +154,23 @@ public static class ThemeManager
 
         var palette = ResolvePaletteSlot(app);
 
-        palette.Source = theme == AppTheme.Dark ? DarkThemeUri : LightThemeUri;
+        // System 不对应具体色板，须先解析成实际取值
+        var resolved = theme == AppTheme.System ? ReadSystemTheme() : theme;
+
+        palette.Source = resolved == AppTheme.Dark ? DarkThemeUri : LightThemeUri;
 
         Current = theme;
     }
+
+    /// <summary>
+    /// 当前实际生效的深浅色（把 <see cref="AppTheme.System"/> 解析为具体值）。
+    /// </summary>
+    /// <remarks>
+    /// "用户选了什么"与"现在是什么颜色"是两个不同的问题：
+    /// 前者是 <see cref="Current"/>，后者是本方法的返回值。
+    /// 界面显示状态时应问"现在是什么颜色"。
+    /// </remarks>
+    public static AppTheme Effective => Current == AppTheme.System ? ReadSystemTheme() : Current;
 
     /// <summary>
     /// 定位 <c>Theme.xaml</c> 内部的色板槽位。
@@ -213,4 +267,21 @@ public enum AppTheme
 
     /// <summary>深色。本轮补齐，按 Apple HIG 夜间模式惯例。</summary>
     Dark,
+
+    /// <summary>
+    /// 跟随系统：读取「设置 → 个性化 → 应用模式」的当前值。
+    /// </summary>
+    /// <remarks>
+    /// 这是缺省取值 —— 它不需要用户做任何决策，
+    /// 且系统切换时外观会随之变化。
+    /// <para>
+    /// 注意：当前仅在<strong>应用启动时</strong>解析一次，
+    /// 不监听系统主题变更事件。原因见 <c>RISKS.md</c>：
+    /// 引入监听需要在 UI 线程注册与注销事件，
+    /// 而托盘驻留场景下的生命周期管理尚未实现（见 Q-007），
+    /// 贸然加入容易产生难以复现的事件泄漏。
+    /// 设置页实现后应一并补上实时跟随。
+    /// </para>
+    /// </remarks>
+    System,
 }
