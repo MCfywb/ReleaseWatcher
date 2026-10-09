@@ -1,5 +1,8 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
+
+using Microsoft.Win32;
 
 namespace ReleaseWatcher.App.Services;
 
@@ -118,22 +121,198 @@ public static class ThemeManager
     }
 
     /// <summary>
-    /// 确定初始主题。
+    /// 从 <c>config.json</c> 读取用户保存的主题选择。
     /// </summary>
+    /// <param name="configFilePath">
+    /// 配置文件完整路径；为 <c>null</c> 或空时视为无可用配置。
+    /// </param>
+    /// <returns>
+    /// 配置中保存的主题；配置不存在、无法解析或取值非法时返回 <see langword="null"/>
+    /// ，由调用方决定回落策略。
+    /// </returns>
     /// <remarks>
-    /// 原方案未定义深色主题，本轮补齐（见 Colors.Dark.xaml 头部说明）。
     /// <para>
-    /// 当前固定为<see cref="AppTheme.System"/>（跟随系统）：
-    /// 这是最不需要用户决策的缺省值，也让深色主题在系统切到深色时自动生效。
+    /// <b>为什么单独读而不读整个配置对象：</b>设置页尚未实现，
+    /// <c>config.json</c> 目前还没有正式的结构定义。此处只做最小解析 ——
+    /// 读一个键、容忍格式不符、绝不抛异常。等到设置页落地、
+    /// 配置结构稳定后，再统一收敛到配置模块（届时会引入正式的
+    /// 反序列化类型，并在此处改为委托调用）。
     /// </para>
     /// <para>
-    /// <b>尚未持久化</b>：真正的用户偏好应存进
-    /// <c>config.json</c> 的 <c>appearance.theme</c>，属Settings 页范围。
-    /// 本轮只实现"跟随系统"这一个可用取值，
-    /// 等设置页就绪后再改为读配置（配置缺失时仍回落到本方法）。
+    /// <b>刻意手写极简 JSON 提取而非引入反序列化库：</b>为一个键引入依赖不划算，
+    /// 且 App 层多一个包就多一处版本冲突来源。本方法只认
+    /// <c>"appearance": { "theme": "..." }</c> 这一种形状，
+    /// 遇到任何其他情况都当作"未配置"处理。
+    /// </para>
+    /// <para>
+    /// <b>失败一律返回 null 而不抛异常：</b>配置文件损坏不应导致应用无法启动。
     /// </para>
     /// </remarks>
-    public static AppTheme ResolveInitialTheme() => AppTheme.System;
+    public static AppTheme? LoadSavedTheme(string? configFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(configFilePath) || !File.Exists(configFilePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(configFilePath);
+
+            // 定位 appearance 段内的 theme 值：容忍空白与任意换行
+            var appearanceIndex = json.IndexOf("\"appearance\"", StringComparison.Ordinal);
+            if (appearanceIndex < 0)
+            {
+                return null;
+            }
+
+            var themeIndex = json.IndexOf("\"theme\"", appearanceIndex, StringComparison.Ordinal);
+            if (themeIndex < 0)
+            {
+                return null;
+            }
+
+            var colonIndex = json.IndexOf(':', themeIndex);
+            if (colonIndex < 0)
+            {
+                return null;
+            }
+
+            var quoteStart = json.IndexOf('"', colonIndex + 1);
+            if (quoteStart < 0)
+            {
+                return null;
+            }
+
+            var quoteEnd = json.IndexOf('"', quoteStart + 1);
+            if (quoteEnd < 0)
+            {
+                return null;
+            }
+
+            var value = json[(quoteStart + 1)..quoteEnd];
+
+            return Enum.TryParse(value, ignoreCase: true, out AppTheme parsed) ? parsed : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 读不了就用默认值，不让偏好设置成为启动障碍
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 把用户选择的主题写入 <c>config.json</c> 的 <c>appearance.theme</c>。
+    /// </summary>
+    /// <param name="configFilePath">配置文件完整路径；无效时静默跳过。</param>
+    /// <param name="theme">要保存的主题。</param>
+    /// <returns>是否写入成功。</returns>
+    /// <remarks>
+    /// <para>
+    /// 文件不存在时创建，内容形如
+    /// <c>{ "appearance": { "theme": "Dark" } }</c>。
+    /// </para>
+    /// <para>
+    /// <b>保留既有配置：</b>配置项会随设置页逐步增多，
+    /// 因此若文件已存在，只替换 <c>appearance.theme</c> 的值而不整体覆写，
+    /// 避免把其他已保存的设置抹掉。
+    /// </para>
+    /// <para>
+    /// <b>写入失败不抛异常：</b>主题切换对用户而言应当"立即生效"，
+    /// 至于能否记住是次要问题。不让它因磁盘只读或权限问题而中断切换。
+    /// </para>
+    /// </remarks>
+    public static bool TrySaveTheme(string? configFilePath, AppTheme theme)
+    {
+        if (string.IsNullOrWhiteSpace(configFilePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var directory = Path.GetDirectoryName(configFilePath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var json = File.Exists(configFilePath)
+                ? File.ReadAllText(configFilePath)
+                : "{}";
+
+            json = UpsertAppearanceTheme(json, theme.ToString());
+
+            File.WriteAllText(configFilePath, json);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 在已有 JSON 文本中写入 <c>appearance.theme</c>，保留其余内容。
+    /// </summary>
+    private static string UpsertAppearanceTheme(string json, string themeValue)
+    {
+        var appearanceIndex = json.IndexOf("\"appearance\"", StringComparison.Ordinal);
+        if (appearanceIndex < 0)
+        {
+            return "{\n  \"appearance\": {\n    \"theme\": \"" + themeValue + "\"\n  }\n}";
+        }
+
+        var themeIndex = json.IndexOf("\"theme\"", appearanceIndex, StringComparison.Ordinal);
+        if (themeIndex < 0)
+        {
+            // 有 appearance 段但没有 theme 键：在该段内补一个
+            var braceIndex = json.IndexOf('{', appearanceIndex);
+            if (braceIndex < 0)
+            {
+                return json;
+            }
+
+            var insertAt = braceIndex + 1;
+            return json.Insert(insertAt, $"\n    \"theme\": \"{themeValue}\",");
+        }
+
+        // 已有 theme 键：替换它的值
+        var colonIndex = json.IndexOf(':', themeIndex);
+        var quoteStart = colonIndex >= 0 ? json.IndexOf('"', colonIndex + 1) : -1;
+        var quoteEnd = quoteStart >= 0 ? json.IndexOf('"', quoteStart + 1) : -1;
+
+        if (colonIndex < 0 || quoteStart < 0 || quoteEnd < 0)
+        {
+            return json;
+        }
+
+        return json[..(quoteStart + 1)] + themeValue + json[quoteEnd..];
+    }
+
+    /// <summary>
+    /// 确定初始主题。
+    /// </summary>
+    /// <param name="configFilePath">
+    /// 配置文件路径。调用方从 <c>IAppPaths.ConfigFile</c> 取得；
+    /// 传 <c>null</c> 表示尚不可用（此时纯跟随系统）。
+    /// </param>
+    /// <returns>
+    /// 配置中保存的主题；若未保存过则返回 <see cref="AppTheme.System"/>。
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// 优先级：<b>用户显式选择 &gt; 跟随系统</b>。
+    /// 这是最不需要用户决策的缺省值 ——
+    /// 从未设置过的用户应当自动获得与系统一致的外观。
+    /// </para>
+    /// <para>
+    /// 原实现无条件返回 <see cref="AppTheme.System"/>，导致用户在下拉框
+    /// 选的主题重启后丢失。现在改为先读配置。
+    /// </para>
+    /// </remarks>
+    public static AppTheme ResolveInitialTheme(string? configFilePath = null)
+        => LoadSavedTheme(configFilePath) ?? AppTheme.System;
 
     /// <summary>
     /// 应用指定主题。
@@ -159,6 +338,9 @@ public static class ThemeManager
 
         palette.Source = resolved == AppTheme.Dark ? DarkThemeUri : LightThemeUri;
 
+        // 记下实际生效的颜色，供跟随系统时判断"是否真的变了"
+        _lastAppliedResolvedTheme = resolved;
+
         Current = theme;
     }
 
@@ -171,6 +353,151 @@ public static class ThemeManager
     /// 界面显示状态时应问"现在是什么颜色"。
     /// </remarks>
     public static AppTheme Effective => Current == AppTheme.System ? ReadSystemTheme() : Current;
+
+    /// <summary>用户主题选择发生变化时触发。参数为变化后的主题。</summary>
+    public static event Action<AppTheme>? ThemeChanged;
+
+    /// <summary>
+    /// 开始监听系统深浅色切换，使 <see cref="AppTheme.System"/> 实时生效。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>监听机制的选择</b>：使用
+    /// <see cref="SystemEvents.UserPreferenceChanged"/>（<c>UserPreferenceCategory.General</c>）。
+    /// 这是 Windows 在用户改动「设置 → 个性化 → 应用模式」时发出的系统级通知，
+    /// 无需轮询、无需 WMI、无需计时器。对比其他方案：
+    /// </para>
+    /// <list type="bullet">
+    /// <item>轮询注册表：简单但要么有延迟要么空耗 CPU，且生命周期问题依旧。</item>
+    /// <item>WMI <c>RegistryValueChangeEvent</c>：可行，但需引入 <c>System.Management</c> 依赖、
+    /// 在 .NET 10 上行为不够稳定，且部分环境会失败。</item>
+    /// <item><see cref="SystemEvents"/>：系统提供的标准通知机制，
+    /// 无额外依赖，是本项目的选择。</item>
+    /// </list>
+    ///
+    /// <para>
+    /// <b>线程问题（本方法最容易出错的地方）：</b>
+    /// <see cref="SystemEvents"/> 在专用的系统事件线程上触发该事件，
+    /// <b>不在 UI 线程</b>。而 <see cref="Apply"/> 会改动
+    /// <c>Application.Resources</c> —— 该对象有线程亲和性，
+    /// 在非 UI 线程改动会抛 <c>InvalidOperationException</c>。
+    /// 因此必须 <see cref="SystemDispatcher.Invoke"/> 回 UI 线程执行。
+    /// </para>
+    ///
+    /// <para>
+    /// <b>泄漏防护（Q-007 关注点）：</b><see cref="SystemEvents"/> 是<b>静态事件</b>，
+    /// 订阅它会让本对象被长期持有，阻止垃圾回收。因此：
+    /// <list type="number">
+    /// <item>只订阅一次（重复调用本方法不重复订阅），
+    /// 用 <see cref="_watchingSystemChanges"/> 标记；</item>
+    /// <item>提供 <see cref="StopWatchingSystemChanges"/>，
+    /// 供应用退出时解除订阅；</item>
+    /// <item>处理器是静态方法，不捕获实例状态，避免意外的引用链。</item>
+    /// </list>
+    /// 托盘驻留场景下应用可能长期存活，退出时务必调用解除订阅
+    /// （见 <c>App.OnExit</c>）。
+    /// </para>
+    /// </summary>
+    public static void StartWatchingSystemChanges()
+    {
+        if (_watchingSystemChanges)
+        {
+            return;
+        }
+
+        SystemEvents.UserPreferenceChanged += OnSystemPreferenceChanged;
+        _watchingSystemChanges = true;
+    }
+
+    /// <summary>
+    /// 停止监听系统主题变更，解除对 <see cref="SystemEvents"/> 静态事件的订阅。
+    /// </summary>
+    /// <remarks>
+    /// 应用退出时必须调用，否则静态事件会一直持有订阅者，
+    /// 使本类型（及其引用的 <c>Application</c>）无法被回收。
+    /// </remarks>
+    public static void StopWatchingSystemChanges()
+    {
+        if (!_watchingSystemChanges)
+        {
+            return;
+        }
+
+        SystemEvents.UserPreferenceChanged -= OnSystemPreferenceChanged;
+        _watchingSystemChanges = false;
+    }
+
+    /// <summary>是否正在监听系统主题变更。仅供诊断与测试读取。</summary>
+    public static bool IsWatchingSystemChanges => _watchingSystemChanges;
+
+    /// <summary>
+    /// 系统偏好变更回调。
+    /// </summary>
+    /// <remarks>
+    /// <b>仅在 <see cref="AppTheme.System"/> 下响应。</b>
+    /// 用户显式选了 Light 或 Dark 时，系统怎么变都不该改他的选择 ——
+    /// 否则等于擅自推翻用户的明确决定。
+    /// </remarks>
+    private static void OnSystemPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != UserPreferenceCategory.General)
+        {
+            return;
+        }
+
+        if (Current != AppTheme.System)
+        {
+            return;
+        }
+
+        var app = System.Windows.Application.Current;
+        if (app is null)
+        {
+            return;
+        }
+
+        // 事件来自系统事件线程，必须切回 UI 线程才能碰 Application.Resources
+        if (app.Dispatcher.HasShutdownStarted || app.Dispatcher.HasShutdownFinished)
+        {
+            return;
+        }
+
+        app.Dispatcher.Invoke(() =>
+        {
+            // 关闭过程中重入保护：Invoke 可能排在退出流程之后才执行
+            if (Current != AppTheme.System
+                || System.Windows.Application.Current is null)
+            {
+                return;
+            }
+
+            var resolved = ReadSystemTheme();
+
+            // 只在颜色真的变了时才重设资源，避免无谓的字典替换与界面重绘。
+            // 比较基准是"上一次实际生效的颜色"，而非 Current ——
+            // System 模式下 Current 恒为 System，拿它比较等于什么都没比。
+            if (resolved == _lastAppliedResolvedTheme)
+            {
+                return;
+            }
+
+            Apply(AppTheme.System);
+
+            ThemeChanged?.Invoke(resolved);
+        });
+    }
+
+    private static bool _watchingSystemChanges;
+
+    /// <summary>
+    /// 上一次 <see cref="Apply"/> 实际解析出的深浅色。
+    /// </summary>
+    /// <remarks>
+    /// 用于在跟随系统时判断颜色是否真的发生了变化：
+    /// <see cref="Current"/> 在 <see cref="AppTheme.System"/> 下恒为
+    /// <see cref="AppTheme.System"/>，无法用它判断。
+    /// </remarks>
+    private static AppTheme? _lastAppliedResolvedTheme;
 
     /// <summary>
     /// 定位 <c>Theme.xaml</c> 内部的色板槽位。
@@ -275,12 +602,14 @@ public enum AppTheme
     /// 这是缺省取值 —— 它不需要用户做任何决策，
     /// 且系统切换时外观会随之变化。
     /// <para>
-    /// 注意：当前仅在<strong>应用启动时</strong>解析一次，
-    /// 不监听系统主题变更事件。原因见 <c>RISKS.md</c>：
-    /// 引入监听需要在 UI 线程注册与注销事件，
-    /// 而托盘驻留场景下的生命周期管理尚未实现（见 Q-007），
-    /// 贸然加入容易产生难以复现的事件泄漏。
-    /// 设置页实现后应一并补上实时跟随。
+    /// <b>实时跟随</b>：已通过 <see cref="ThemeManager.StartWatchingSystemChanges"/>
+    /// 监听 <see cref="SystemEvents.UserPreferenceChanged"/> 实现，
+    /// 系统切换深浅色后界面随之更新，无需重启。
+    /// 应用退出时会解除订阅（见 <c>App.OnExit</c>），避免静态事件泄漏。
+    /// </para>
+    /// <para>
+    /// 注意：用户一旦显式选择 Light 或 Dark，系统变更<b>不再影响</b>外观 ——
+    /// 显式选择优先于跟随。
     /// </para>
     /// </remarks>
     System,
