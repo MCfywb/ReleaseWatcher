@@ -70,10 +70,10 @@ public partial class MainWindow : Window
         // （标题栏现在只放应用名）。
         AboutPathsText.Text = paths.AppDirectory;
 
-        // Sidebar 初始宽度：必须在代码里设。
-        // ColumnDefinition.Width 是 GridLength，而 Size.SidebarWidth 是 sys:Double，
-        // 在 XAML 里直接绑定会抛 XamlParseException（编译期不报错，只在启动时崩）。
-        SidebarColumn.Width = new GridLength(ThemeMetrics.SidebarWidth);
+        // 应用 Sidebar 初始状态（展开：宽度 220、内边距生效、图标靠左）。
+        // 注意宽度不能在 XAML 绑定：ColumnDefinition.Width 是 GridLength，
+        // 而 Size.SidebarWidth 是 sys:Double，绑定会在启动时抛 XamlParseException。
+        ApplySidebarState();
 
         // 初始页：XAML 里 IsChecked="True" 触发的 Checked 事件发生在解析期间，
         // 已被 Nav_Checked 的 null 保护忽略，故此处在 InitializeComponent()
@@ -134,19 +134,42 @@ public partial class MainWindow : Window
     {
         _sidebarExpanded = !_sidebarExpanded;
 
+        ApplySidebarState();
+    }
+
+    /// <summary>
+    /// 把 Sidebar 的当前状态落到界面。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>单一入口</b>：构造函数与汉堡点击都调它，
+    /// 避免两处各写一份导致初始态与切换后不一致
+    /// —— 漏设初始态是这类展开/收起功能最常见的缺陷。
+    /// </para>
+    /// <para>
+    /// 收起态为什么必须同时改三处：
+    /// <c>52 − 外边距 8×2 − 内边距 16×2 = 仅剩 4px</c>，
+    /// 放不下 16px 的图标 → 表现为"图标显示不全"。
+    /// 故收起时：宽度改 52、内边距归零、内容居中；
+    /// 且图标自身的右侧间距也要归零，否则图标偏离中心。
+    /// </para>
+    /// </remarks>
+    private void ApplySidebarState()
+    {
         SidebarColumn.Width = new GridLength(_sidebarExpanded
             ? ThemeMetrics.SidebarWidth
             : ThemeMetrics.SidebarCollapsedWidth);
 
-        // 收起态必须同时去掉内边距并让内容居中，否则图标会被裁切：
-        // 收起宽度 52 − 外边距 8×2 − 内边距 16×2 = 仅剩 4px，放不下 16px 的图标
-        // （2026-10-09 用户反馈"点击汉堡菜单后图标显示不全"）。
-        var navPadding = _sidebarExpanded ? ThemeMetrics.NavItemPadding : new Thickness(0);
+        var padding = _sidebarExpanded ? ThemeMetrics.NavItemPadding : new Thickness(0);
         var alignment = _sidebarExpanded ? HorizontalAlignment.Left : HorizontalAlignment.Center;
+
+        // 汉堡按钮与下方导航项保持同一对齐规则：展开靠左、收起居中
+        HamburgerButton.Padding = padding;
+        HamburgerButton.HorizontalContentAlignment = alignment;
 
         foreach (var nav in new[] { OverviewNav, ReposNav, DownloadsNav, SettingsNav })
         {
-            nav.Padding = navPadding;
+            nav.Padding = padding;
             nav.HorizontalContentAlignment = alignment;
         }
 

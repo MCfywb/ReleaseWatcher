@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace ReleaseWatcher.ArchitectureTests;
 
 /// <summary>
@@ -159,6 +161,51 @@ public sealed class ApplicationLifecycleTests
         var content = File.ReadAllText(designSystemXaml);
         Assert.Contains("语义色", content);
         Assert.Contains("ColorSamples", content);
+    }
+
+    [Fact]
+    public void WindowXaml_MustNotDuplicateImplicitStyleKeys()
+    {
+        // 2026-10-09 真实故障：给 MainWindow.xaml 新加了 <Style TargetType="ToolTip">，
+        // 而 Controls.xaml 里已有一份。运行时合并资源字典时抛
+        // "Item has already been added"，表现同样是"exe 打不开"。
+        //
+        // 隐式样式（无 x:Key）的 key 即其 TargetType，
+        // 因此重复定义隐式样式 = 重复 key。编译期不报错。
+        var keys = new List<string>();
+
+        foreach (var file in new[]
+                 {
+                     Path.Combine("Views", "MainWindow.xaml"),
+                     Path.Combine("Resources", "Theme", "Typography.xaml"),
+                     Path.Combine("Resources", "Theme", "Controls.xaml"),
+                 })
+        {
+            if (!File.Exists(AppSource(file)))
+            {
+                continue;
+            }
+
+            foreach (Match match in Regex.Matches(
+                         ReadAppSource(file),
+                         @"<Style\s+TargetType=""(?<type>[A-Za-z.]+)""",
+                         RegexOptions.None,
+                         TimeSpan.FromSeconds(2)))
+            {
+                keys.Add(match.Groups["type"].Value);
+            }
+        }
+
+        var duplicates = keys
+            .GroupBy(k => k, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToArray();
+
+        Assert.True(
+            duplicates.Length == 0,
+            "以下类型被重复定义为隐式样式（同一 key 只能出现一次，"
+            + "否则运行时合并资源字典时崩溃）：" + string.Join(", ", duplicates));
     }
 
     [Fact]
