@@ -683,6 +683,58 @@ public sealed class DesignSystemTests
         Assert.Contains("Tag=\"System\"", content, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 预览页的水平 <see cref="StackPanel"/> 中，**元素间间隙**不得用左右双向边距键。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 2026-10-09 实际故障：圆角示例的三个框、控件行、状态色 chips 等，
+    /// 相邻元素都用了 <c>Space.Padding.Horizontal.S</c>（"8,0" = 左右各 8）。
+    /// 在水平 StackPanel 中，间隙 = 左元素 Right(8) + 右元素 Left(8) = 16，
+    /// 是预期的两倍；更糟的是最后一个元素往往不赋该键，
+    /// 于是间隙在 16 与 8 之间交替 —— 用户肉眼可见"三个框间距不一样"。
+    /// </para>
+    /// <para>
+    /// 元素间间隙必须使用**右侧单边**键（<c>Space.Margin.Right.*</c>），
+    /// 且只赋给"除最后一个外的每个元素"，才能保证间隙正好 = N 且处处相等。
+    /// 此断言禁止在预览页的 <c>Margin</c> 上引用左右双向键，
+    /// 把约定固化下来。
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void PreviewPage_InterItemGapsMustUseRightOnlyMargin()
+    {
+        var path = Path.Combine(AppProjectRoot(), "Views", "MainWindow.xaml");
+        var content = File.ReadAllText(path);
+
+        var offenders = Regex.Matches(content, @"Margin=""\{StaticResource Space\.Padding\.Horizontal")
+            .Count;
+
+        Assert.True(
+            offenders == 0,
+            $"预览页发现 {offenders} 处用左右双向边距键作元素间间隙（应改用 Space.Margin.Right.*）。");
+    }
+
+    /// <summary>
+    /// 间距字典必须提供右侧单边间隙键（<c>Space.Margin.Right.*</c>）。
+    /// </summary>
+    /// <remarks>
+    /// 若这些键缺失，预览页会被迫退回左右双向键，重新引入间隙翻倍故障。
+    /// </remarks>
+    [Fact]
+    public void SpacingXaml_MustDefineRightOnlyMarginKeys()
+    {
+        var path = Path.Combine(AppProjectRoot(), "Resources", "Theme", "Spacing.xaml");
+        var content = File.ReadAllText(path);
+
+        foreach (var key in new[] { "Space.Margin.Right.S", "Space.Margin.Right.M", "Space.Margin.Right.L", "Space.Margin.Right.XL" })
+        {
+            Assert.True(
+                content.Contains($"x:Key=\"{key}\""),
+                $"缺少右侧单边间隙键 {key}");
+        }
+    }
+
     /// <summary>App 项目根目录。</summary>
     private static string AppProjectRoot()
         => Path.Combine(SolutionLayout.SolutionRoot, "src", "ReleaseWatcher.App");
