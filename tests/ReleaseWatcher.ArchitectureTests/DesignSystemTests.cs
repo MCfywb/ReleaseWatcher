@@ -223,10 +223,15 @@ public sealed class DesignSystemTests
 
             var content = File.ReadAllText(file);
 
-            // 去掉注释与字符串字面量，避免把文档里的示例算作违规
+            // 去掉注释与字符串字面量，避免把文档里的示例算作违规。
+            //
+            // 必须同时处理普通字符串、@ 字符串与**插值字符串** $""：
+            // 只剥离 @"" 会漏掉 $"..." 里的内容，而插值字符串
+            // 恰恰是异常消息的常用写法 —— 守卫会对它误报。
             var stripped = Regex.Replace(content, @"//.*$", string.Empty, RegexOptions.Multiline);
             stripped = Regex.Replace(stripped, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline);
             stripped = Regex.Replace(stripped, "@\"[^\"]*\"", "@\"\"", RegexOptions.None);
+            stripped = Regex.Replace(stripped, "\\$\"(\\{[^\"}]*\\}|[^\"])*\"", "\"\"", RegexOptions.None);
 
             // 匹配未加前缀的 Application. —— System.Windows.Application. 已在前面，
             // 因此排除该前缀。ReleaseWatcher.Application. 同样不算违规。
@@ -341,6 +346,198 @@ public sealed class DesignSystemTests
 
             Assert.True(exception is null, $"{fileName} 不是合法 XML：{exception?.Message}");
         }
+    }
+
+    /// <summary>
+    /// ThemeManager 不得替换 <c>Theme.xaml</c> 本身。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>这是本项目最隐蔽的一个真实故障。</b>用户两次反馈
+    /// "深色模式下 CheckBox 文字是黑色的""ComboBox 下拉后下拉框背景是白色的"，
+    /// 看起来是配色问题，实际是 —— <c>Theme.xaml</c> 内部的
+    /// Typography / Spacing / Controls 三个字典<strong>从未被加载过</strong>。
+    /// </para>
+    /// <para>
+    /// <b>成因</b>：早先的 <c>ThemeManager.Apply</c> 直接把
+    /// <c>App.Resources.MergedDictionaries[0]</c>（那正是 Theme.xaml）
+    /// 替换成了 <c>Colors.Dark.xaml</c>。替换掉的是 Theme.xaml 整体，
+    /// 三个样式字典随之消失，所有控件退回系统默认（Aero）外观。
+    /// </para>
+    /// <para>
+    /// <b>为什么极易误判</b>：颜色键 <c>Brush.Text.Primary</c> 仍能正确解析
+    /// （替换进去的那份 Colors 本身是好的），于是"两种颜色各自都对，
+    /// 缺的只是承载样式的字典" —— 看起来像主题切换没生效，
+    /// 实际是样式压根没加载。
+    /// </para>
+    /// <para>
+    /// <b>修法</b>：ThemeManager 改为向下定位 Theme.xaml，
+    /// 只替换它内部的色板槽位（<c>Theme.xaml</c> 的 MergedDictionaries[0]）。
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ThemeManager_ShouldReplaceInnerPaletteSlotNotThemeEntry()
+    {
+        var path = Path.Combine(AppProjectRoot(), "Services", "ThemeManager.cs");
+        var content = File.ReadAllText(path);
+
+        // 危险写法：直接对 app.Resources.MergedDictionaries 下标赋值
+        var dangerousAssignment = Regex.Matches(
+            content,
+            @"app\.Resources\.MergedDictionaries\s*\[[^\]]*\]\s*=",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(2));
+
+        Assert.True(
+            dangerousAssignment.Count == 0,
+            "ThemeManager 直接对 app.Resources.MergedDictionaries[下标] 赋值："
+            + "那会替换掉 Theme.xaml 本身，连带删除 Typography / Spacing / Controls"
+            + "三个字典，所有控件样式失效并退回系统默认外观。"
+            + "应改为定位 Theme.xaml 内部后替换其色板槽位。");
+
+        // 必须向下定位 Theme.xaml
+        Assert.Contains(
+            "Theme.xaml",
+            content,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ThemeEntry_ShouldNestAllDictionariesIncludingControls()
+    {
+        // Theme.xaml 必须自身合并全部四个字典。
+        //
+        // 控件样式（Controls.xaml）加载在 Theme.xaml 内部，而不是 App.xaml 顶层 ——
+        // 因为 ThemeManager 要按"下标 + 顺序"定位色板槽位，
+        // 顶层结构一旦变化，定位就会失效。
+        var path = Path.Combine(AppProjectRoot(), ThemeDirectory, "Theme.xaml");
+        var sources = XDocument.Load(path).Descendants()
+            .Where(e => e.Name.LocalName == "ResourceDictionary"
+                        && e.Attribute("Source") is not null)
+            .Select(e => e.Attribute("Source")!.Value)
+            .ToArray();
+
+        Assert.Contains(sources, s => s.Contains("Colors.Light", StringComparison.Ordinal));
+        Assert.Contains(sources, s => s.Contains("Typography", StringComparison.Ordinal));
+        Assert.Contains(sources, s => s.Contains("Spacing", StringComparison.Ordinal));
+        Assert.Contains(sources, s => s.Contains("Controls", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Popup 内不得使用 <c>StaticResource</c>。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WPF 的 <c>Popup</c> 内容被放入<strong>独立的窗口树</strong>，
+    /// 其资源查找不会经过 <c>Controls.xaml</c> 合并进来的
+    /// <c>Spacing.xaml</c> / <c>Typography.xaml</c>。
+    /// </para>
+    /// <para>
+    /// 此时 <c>StaticResource</c> 解析失败，返回的是字符串字面量，
+    /// 随后被喂给类型转换器，于是抛
+    /// <c>FormatException: 无法将"{StaticResource"转换为 Length</c>，
+    /// <strong>应用启动即崩溃</strong>。
+    /// </para>
+    /// <para>
+    /// 实测确认：ComboBox 下拉面板的 Margin / CornerRadius / ItemsPresenter
+    /// 三处改为 DynamicResource 后崩溃消失。
+    /// <c>DynamicResource</c> 会向上查找到 <c>Application.Resources</c>，
+    /// 而设计系统字典都在那里。
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void PopupContent_MustNotUseStaticResource()
+    {
+        var path = Path.Combine(AppProjectRoot(), ThemeDirectory, "Controls.xaml");
+        var content = File.ReadAllText(path);
+
+        // 提取每个 <Popup ...> 到其配对 </Popup> 之间的内容
+        var offenders = new List<string>();
+
+        foreach (Match popup in Regex.Matches(content, "<Popup\\b.*?</Popup>", RegexOptions.Singleline))
+        {
+            var inner = popup.Value;
+
+            foreach (Match staticResource in Regex.Matches(
+                inner, "StaticResource\\s+[A-Za-z][A-Za-z.]*"))
+            {
+                offenders.Add(staticResource.Value);
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "Popup 内不得使用 StaticResource —— Popup 位于独立窗口树，"
+            + "资源查找不会经过本字典合并进来的其他字典，解析失败后"
+            + "会被当作字符串喂给类型转换器而崩溃。发现："
+            + string.Join("、", offenders.Distinct())
+            + "。改用 DynamicResource。");
+    }
+
+    /// <summary>
+    /// <c>Thickness</c> 属性不得引用 <c>sys:Double</c> 类型的资源键。
+    /// </summary>
+    /// <remarks>
+    /// <c>Space.XS</c> 等间距键是 <c>sys:Double</c>（供 Width / Height 用），
+    /// 而 <c>Margin</c> / <c>Padding</c> 是 <c>Thickness</c> 类型。
+    /// 把 Double 键用于 Thickness 属性会抛
+    /// <c>FormatException: 无法将"{StaticResource"转换为 Length</c>。
+    /// <para>
+    /// Thickness 属性须引用 <c>Space.Padding.*</c> / <c>Space.Margin.*</c>，
+    /// Width / Height 须引用 <c>Space.*</c> 或 <c>Size.Space.*</c>。
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ThicknessAttributes_MustNotReferenceDoubleSpacingKeys()
+    {
+        var offenders = new List<string>();
+
+        var files = new[]
+        {
+            Path.Combine(AppProjectRoot(), ThemeDirectory, "Controls.xaml"),
+            Path.Combine(AppProjectRoot(), ThemeDirectory, "Theme.xaml"),
+            Path.Combine(AppProjectRoot(), "Views", "MainWindow.xaml"),
+        };
+
+        // 匹配两类位置：
+        //   1. <Setter Property="Padding" Value="{StaticResource ...}" />
+        //   2. <Element Margin="{StaticResource ...}" />
+        // 只查 Margin/Padding 属性是不够的 —— Setter.Value 同样会崩。
+        var pattern = new Regex(
+            @"(?:Value|Margin|Padding)=\""(?<value>[^\""']*StaticResource[^\""']*)\""",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(2));
+
+        foreach (var file in files.Where(File.Exists))
+        {
+            var content = File.ReadAllText(file);
+
+            foreach (Match match in pattern.Matches(content))
+            {
+                var value = match.Groups["value"].Value;
+
+                // Space.Padding.* / Space.Margin.* 是 Thickness，正确
+                if (value.Contains("Space.Padding", StringComparison.Ordinal)
+                    || value.Contains("Space.Margin", StringComparison.Ordinal)
+                    || value.Contains("Size.ContentPadding", StringComparison.Ordinal)
+                    || value.Contains("Size.BorderThickness", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                // 其余 Space.* 是 sys:Double，用在 Thickness 上会崩
+                if (value.Contains("Space.", StringComparison.Ordinal))
+                {
+                    offenders.Add($"{Path.GetFileName(file)}: {match.Value}");
+                }
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "Margin / Padding 是 Thickness 类型，不可引用 sys:Double 的间距键"
+            + "（会导致启动崩溃）。应改用 Space.Padding.* 或 Space.Margin.*："
+            + string.Join(" | ", offenders.Distinct().Take(5)));
     }
 
     /// <summary>App 项目根目录。</summary>
