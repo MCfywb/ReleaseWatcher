@@ -1,8 +1,7 @@
 ﻿<Application x:Class="ReleaseWatcher.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:ReleaseWatcher.App"
-             ShutdownMode="OnExplicitShutdown">
+             xmlns:local="clr-namespace:ReleaseWatcher.App">
     <!--
         StartupUri 已移除（原本为 MainWindow.xaml）。
 
@@ -10,12 +9,19 @@
         （见 App.xaml.cs 的 OnStartup）。保留 StartupUri 会导致窗口被自动
         实例化两次 —— 一次无依赖的默认实例，一次容器创建的实例。
 
-        ShutdownMode="OnExplicitShutdown"：关闭主窗口不直接结束进程。
-        依据 DECISIONS.md D-026（设置项含"关闭窗口时最小化到托盘"）
-        与"驻留后台定时检测"的产品目标。
-        注意：托盘功能本身尚未实现，当前关闭主窗口会导致进程无窗口残留
-        —— 这是已知待修项，见 NOW.md。实现托盘时由托盘菜单项显式调用
-        Application.Current.Shutdown() 退出。
+        ShutdownMode 保持 WPF 默认值 OnLastWindowClose。
+        此前设为 OnExplicitShutdown 是为托盘预留（DECISIONS.md D-026
+        「设置项含关闭窗口时最小化到托盘」），但托盘尚未实现，
+        结果是关闭主窗口后进程无窗口残留 —— 用户看不到任何界面，
+        进程却仍在运行，只能靠任务管理器结束。
+
+        改为默认值的代价：将来实现托盘时，若要恢复「关闭主窗口而进程留存」
+        的行为，需重新设为 OnExplicitShutdown，并由托盘菜单项显式调用
+        Application.Current.Shutdown()。届时应在 App.xaml.cs 的
+        OnExit 中确保事件订阅被解除（见 ThemeManager.StartWatchingSystemChanges）。
+
+        前提条件（决定何时能改回去）：托盘已实现，且设置项
+        「关闭窗口时最小化到托盘」已实际生效。见 NOW.md 待修项。
     -->
     <Application.Resources>
         <ResourceDictionary>
