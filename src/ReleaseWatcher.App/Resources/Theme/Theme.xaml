@@ -4,27 +4,54 @@
     App.xaml 只引用这一个文件；新增设计系统字典时只改这里，
     不必改动 App.xaml 或任何控件。
 
-    合并顺序有讲究：
+    ============================ 关键设计 ============================
+    **切换主题时，本字典绝不能被整体替换。**
 
-        颜色在最前 → 依赖颜色的控件样式在后。
-        WPF 的 MergedDictionaries 后加入的字典可以引用先加入的键；
-        反向引用会解析失败。因此 Colors 必须排在 Typography / Spacing /
-        Controls 之前（后者会 StaticResource 引用前者的键）。
-        Typography 与 Spacing 相互无依赖，顺序不限。
+    本项目的真实教训（2026-10-09）：
+    最初 Theme.xaml 内部合并 四个字典（Colors / Typography / Spacing / Controls），
+    而 ThemeManager 直接把 App.Resources.MergedDictionaries[0]
+    （即 Theme.xaml 本身）替换成 Colors.Dark.xaml。
 
-    颜色字典为何放在最外层而不是 Controls 内部：
+    结果：Typography / Spacing / Controls 三者随之消失 ——
+    所有控件样式失效，界面退回 WPF 系统默认（Aero）外观。
 
-        主题切换要整体替换 Colors.Dict，替换后 Controls 中的
-        DynamicResource 会自动重新求值。若 Colors 被合并进 Controls，
-        替换粒度变大，且容易出现同一键被多处定义。
+    迷惑之处在于：颜色键Brush.Text.Primary 仍能正确解析
+    （替换进去的那份 Colors 是好的），于是现象表现为
+    "深色下 CheckBox 文字是黑的""ComboBox 下拉面板是白的"，
+    看起来像配色问题，实际是**样式字典根本没加载**。
+    两种颜色各自都对，缺的是承载样式的字典 —— 这个混淆让排查绕了远路。
+
+    因此现在的结构是：
+
+        App.Resources.MergedDictionaries[0] = Theme.xaml   ← 永不替换
+            ├── [0] Colors.xaml     ← 唯一被 ThemeManager 替换的一层
+            ├── [1] Typography.xaml
+            ├── [2] Spacing.xaml
+            └── [3] Controls.xaml
+
+    ThemeManager 只替换 Theme.xaml 内部的 [0]，
+    其余三层始终在位，控件样式不会丢失。
+
+    **若将来要改 ThemeManager 的替换目标，先读本段注释。**
+    ==============================================================
+
+    合并顺序：
+        Colors 在最前 —— 主题切换替换的就是它，
+        而 Typography / Spacing / Controls 会引用颜色键。
+        Controls 在最后：它 StaticResource 引用前两者的键，
+        WPF 的 MergedDictionaries 只能引用**先加入**的字典。
 -->
 
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- 默认浅色主题。ThemeManager 会在启动时按系统设置覆盖 -->
     <ResourceDictionary.MergedDictionaries>
+        <!--
+            色板槽位。ThemeManager 通过替换 Theme.xaml 内部的这一项
+            来切换主题 —— 见 ThemeManager.Apply 的实现与本文件头部说明。
+        -->
         <ResourceDictionary Source="/ReleaseWatcher.App;component/Resources/Theme/Colors.Light.xaml" />
+
         <ResourceDictionary Source="/ReleaseWatcher.App;component/Resources/Theme/Typography.xaml" />
         <ResourceDictionary Source="/ReleaseWatcher.App;component/Resources/Theme/Spacing.xaml" />
         <ResourceDictionary Source="/ReleaseWatcher.App;component/Resources/Theme/Controls.xaml" />

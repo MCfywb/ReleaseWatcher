@@ -8,9 +8,19 @@ namespace ReleaseWatcher.App.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>切换的实现方式</b>：替换 <see cref="Application.Resources"/> 中的
-/// 颜色字典（<c>Colors.Light.xaml</c> / <c>Colors.Dark.xaml</c>），
-/// 其余字典（字体、间距、控件样式）保持不变。
+/// <b>切换的实现方式</b>：替换 <c>Theme.xaml</c> <strong>内部</strong>的色板槽位
+/// （<c>Colors.Light.xaml</c> / <c>Colors.Dark.xaml</c>），
+/// 字体、间距、控件样式三层始终在位。
+/// </para>
+///
+/// <para>
+/// <b>不要改成替换 Theme.xaml 本身。</b>
+/// 曾这样实现过，后果是 Typography / Spacing / Controls 三个字典随
+/// Theme.xaml 一同消失，所有控件样式失效，界面退回系统默认（Aero）外观。
+/// 而颜色键此时仍能正确解析（替换进去的 Colors 本身是好的），
+/// 于是现象表现为"深色下 CheckBox 文字是黑的""ComboBox 下拉面板是白的" ——
+/// 两种颜色各自都对，缺的只是承载样式的字典，极易误判为配色问题。
+/// 详见 <c>Theme.xaml</c> 头部注释与 <c>DECISIONS.md</c> D-046。
 /// </para>
 ///
 /// <para>
@@ -21,12 +31,11 @@ namespace ReleaseWatcher.App.Services;
 /// </para>
 ///
 /// <para>
-/// <b>为什么不用单个字典 + 两套 key：</b>
-/// 曾尝试用「无后缀键指向 .Light 色值」的方式做别名，
+/// <b>关于画刷别名：</b>曾尝试用"无后缀键指向带后缀键"的方式做别名，
 /// 但 <c>SolidColorBrush.Color</c> 通过 DynamicResource 间接取值时，
 /// 画刷自身的 <c>Opacity</c> 不会被别名继承 ——
 /// hover / selected / pressed 这三类叠加层会退化成不透明色块。
-/// 整体替换字典没有这个问题，故采用此方案。
+/// 因此改用"整体替换色板字典"，无别名、无继承问题。
 /// </para>
 ///
 /// <para>
@@ -35,8 +44,8 @@ namespace ReleaseWatcher.App.Services;
 /// <c>System.Windows.Application</c>。因此凡写
 /// <c>Application.Current</c> 都会报
 /// <c>error CS0234: 命名空间"ReleaseWatcher.Application"中不存在类型或命名空间名"Current"</c>。
-/// 必须写全名 <c>Application.Current</c>。
-/// 同样的坑已在 <c>App.xaml.cs</c> 出现过一次。
+/// 必须写全名 <c>System.Windows.Application.Current</c>。
+/// 同样的坑已在 <c>App.xaml.cs</c> 出现过。
 /// </para>
 ///
 /// <para>
@@ -46,18 +55,21 @@ namespace ReleaseWatcher.App.Services;
 /// </remarks>
 public static class ThemeManager
 {
-    /// <summary>颜色字典在 <c>Resources.MergedDictionaries</c> 中的下标。</summary>
+    /// <summary>
+    /// 色板槽位在 <c>Theme.xaml</c> 的 MergedDictionaries 中的下标。
+    /// </summary>
     /// <remarks>
-    /// 依赖顺序：<c>Theme.xaml</c> 把 Colors 放在第一个位置。
-    /// 改动 <c>Theme.xaml</c> 的合并顺序时必须同步改这里。
+    /// 依赖 <c>Theme.xaml</c> 把 Colors.Light.xaml 放在第一个位置。
+    /// 改动合并顺序时必须同步改这里，否则主题切换会替换错字典。
     /// </remarks>
-    private const int ColorDictionaryIndex = 0;
+    private const int ColorPaletteIndex = 0;
 
-    /// <summary>浅色主题字典的 pack URI。</summary>
+    private const string ThemeEntryPath =
+        "/ReleaseWatcher.App;component/Resources/Theme/Theme.xaml";
+
     private static readonly Uri LightThemeUri =
         new("/ReleaseWatcher.App;component/Resources/Theme/Colors.Light.xaml", UriKind.Relative);
 
-    /// <summary>深色主题字典的 pack URI。</summary>
     private static readonly Uri DarkThemeUri =
         new("/ReleaseWatcher.App;component/Resources/Theme/Colors.Dark.xaml", UriKind.Relative);
 
@@ -77,8 +89,7 @@ public static class ThemeManager
     /// 下次启动就失效的行为 —— 反而更难排查。
     /// </para>
     /// <para>
-    /// 实现设置页后，此处改为读 <c>config.json</c>，
-    /// 并在本轮确定的值之前仍以浅色作为缺省。
+    /// 实现设置页后，此处改为读 <c>config.json</c>。
     /// </para>
     /// </remarks>
     public static AppTheme ResolveInitialTheme() => AppTheme.Light;
@@ -88,8 +99,8 @@ public static class ThemeManager
     /// </summary>
     /// <param name="theme">目标主题。</param>
     /// <exception cref="InvalidOperationException">
-    /// 应用资源中找不到颜色字典 —— 通常意味着 <c>Theme.xaml</c> 的合并顺序被改动，
-    /// 或 <c>App.xaml</c> 未引用它。
+    /// 应用资源中找不到 <c>Theme.xaml</c>，或其内部缺少色板槽位 ——
+    /// 通常意味着 <c>App.xaml</c> 未引用它，或合并顺序被改动。
     /// </exception>
     public static void Apply(AppTheme theme)
     {
@@ -100,18 +111,49 @@ public static class ThemeManager
             return;
         }
 
-        var merged = app.Resources.MergedDictionaries;
+        var palette = ResolvePaletteSlot(app);
 
-        if (merged.Count <= ColorDictionaryIndex)
-        {
-            throw new InvalidOperationException(
-                $"资源字典数量不足：预期至少 {ColorDictionaryIndex + 1} 个，实际 {merged.Count} 个。"
-                + "请检查 App.xaml 是否引用了 Theme.xaml，以及 Theme.xaml 的合并顺序。");
-        }
-
-        merged[ColorDictionaryIndex] = new ResourceDictionary { Source = theme == AppTheme.Dark ? DarkThemeUri : LightThemeUri };
+        palette.Source = theme == AppTheme.Dark ? DarkThemeUri : LightThemeUri;
 
         Current = theme;
+    }
+
+    /// <summary>
+    /// 定位 <c>Theme.xaml</c> 内部的色板槽位。
+    /// </summary>
+    /// <remarks>
+    /// 逐层向下找到 Theme.xaml 那一层，再取它的第
+    /// <see cref="ColorPaletteIndex"/> 项。
+    /// <para>
+    /// 之所以要向下钻，而不是直接用
+    /// <c>App.Resources.MergedDictionaries[0]</c>：
+    /// 后者正是 Theme.xaml 本身，替换它会把其余三个字典一并带走
+    /// （见类型注释中记录的真实故障）。
+    /// </para>
+    /// </remarks>
+    private static ResourceDictionary ResolvePaletteSlot(System.Windows.Application app)
+    {
+        foreach (var dictionary in app.Resources.MergedDictionaries)
+        {
+            if (dictionary.Source?.ToString() != ThemeEntryPath)
+            {
+                continue;
+            }
+
+            if (dictionary.MergedDictionaries.Count > ColorPaletteIndex)
+            {
+                return dictionary.MergedDictionaries[ColorPaletteIndex];
+            }
+
+            throw new InvalidOperationException(
+                $"Theme.xaml 的合并字典数量不足：预期至少 {ColorPaletteIndex + 1} 个，"
+                + $"实际 {dictionary.MergedDictionaries.Count} 个。"
+                + "请确认 Colors.Light.xaml 仍排在 Theme.xaml 的第一位。");
+        }
+
+        throw new InvalidOperationException(
+            $"在 Application.Resources 中未找到 {ThemeEntryPath}。"
+            + "请检查 App.xaml 是否引用了 Theme.xaml。");
     }
 
     /// <summary>
@@ -127,9 +169,39 @@ public static class ThemeManager
             return null;
         }
 
-        // 逐层查找：Theme.xaml 把颜色并入了 App.Resources，
-        // 因此 Application.TryFindResource 能穿透 MergedDictionaries。
+        // Application.TryFindResource 会逐层穿透 MergedDictionaries，
+        // 因此无论色板在第几层都能找到。
         return app.TryFindResource(resourceKey) as Brush;
+    }
+
+    /// <summary>
+    /// 列出当前已加载的设计系统字典，供诊断与测试使用。
+    /// </summary>
+    /// <remarks>
+    /// 该方法的存在本身就说明一个教训：样式字典是否真的加载了，
+    /// 不能靠"颜色对不对"推断 —— 必须能把加载清单打出来看。
+    /// </remarks>
+    public static IReadOnlyList<string> DescribeLoadedDictionaries()
+    {
+        var app = System.Windows.Application.Current;
+        if (app is null)
+        {
+            return Array.Empty<string>();
+        }
+
+        var names = new List<string>();
+
+        foreach (var top in app.Resources.MergedDictionaries)
+        {
+            names.Add(top.Source?.ToString() ?? "(内联)");
+
+            foreach (var inner in top.MergedDictionaries)
+            {
+                names.Add("  └ " + (inner.Source?.ToString() ?? "(内联)"));
+            }
+        }
+
+        return names;
     }
 }
 

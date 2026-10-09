@@ -60,6 +60,7 @@ public partial class App : System.Windows.Application
         var mainWindow = Services.GetRequiredService<Views.MainWindow>();
         MainWindow = mainWindow;
         mainWindow.Show();
+
     }
 
     protected override async void OnExit(ExitEventArgs e)
