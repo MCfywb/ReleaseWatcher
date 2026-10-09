@@ -61,14 +61,20 @@ public partial class App : System.Windows.Application
         //
         // 注意必须写全名：局部变量 Services 遮蔽了 Themes 之外的名字空间，
         // 简写会报CS1061（见本文件头部关于命名空间冲突的说明）。
-        var themeManager = global::ReleaseWatcher.App.Services.ThemeManager;
+        //
+        // 也**不能**为它起一个同名局部变量（如 var themeManager = ...ThemeManager）：
+        // 局部变量一旦与静态类同名，后续 themeManager.Apply(...) 会被解析成
+        // "用变量访问静态成员"，报 CS0119 / CS0723 / CS0176。
+        // 保持全名静态调用，不引入别名。
+        var initialTheme = global::ReleaseWatcher.App.Services.ThemeManager
+            .ResolveInitialTheme(paths.ConfigFile);
 
-        themeManager.Apply(themeManager.ResolveInitialTheme(paths.ConfigFile));
+        global::ReleaseWatcher.App.Services.ThemeManager.Apply(initialTheme);
 
         // 让"跟随系统"实时生效：用户在系统设置里切换深浅色后，界面随之更新。
         // 仅在用户选择 System 时才有实际效果 —— 显式选定的 Light/Dark 不受影响。
         // 订阅与解除见 ThemeManager.StartWatchingSystemChanges 的说明（Q-007）。
-        themeManager.StartWatchingSystemChanges();
+        global::ReleaseWatcher.App.Services.ThemeManager.StartWatchingSystemChanges();
 
         // 由容器创建主窗口，以便其构造函数可注入依赖。
         // StartupUri 已清空（见 App.xaml），此处手动 Show。

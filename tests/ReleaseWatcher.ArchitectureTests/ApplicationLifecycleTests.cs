@@ -174,10 +174,19 @@ public sealed class ApplicationLifecycleTests
     {
         // 主题必须在创建任何窗口之前定下来：控件样式在构造阶段即解析颜色，
         // 先创建窗口再切主题会导致可见的闪烁（旧色板 → 新色板）。
+        //
+        // 断言匹配 "ThemeManager" + ".Apply(" 两段，而不是某段具体源码 ——
+        // 刻意不写成 themeManager.Apply(...)：曾用局部变量别名引用这个静态类，
+        // 触发 CS0119/CS0723（别名与类型同名），且写法一变断言就失效。
         var appCode = ReadAppSource("App.xaml.cs");
 
-        var applyIndex = appCode.IndexOf("themeManager.Apply", StringComparison.Ordinal);
-        var windowIndex = appCode.IndexOf("Services.GetRequiredService<Views.MainWindow>", StringComparison.Ordinal);
+        var applyIndex = appCode.IndexOf("ThemeManager", StringComparison.Ordinal);
+        applyIndex = applyIndex >= 0
+            ? appCode.IndexOf(".Apply(", applyIndex, StringComparison.Ordinal)
+            : -1;
+
+        var windowIndex = appCode.IndexOf(
+            "Services.GetRequiredService<Views.MainWindow>", StringComparison.Ordinal);
 
         Assert.True(applyIndex > 0, "App.xaml.cs 中未找到主题应用调用");
         Assert.True(windowIndex > 0, "App.xaml.cs 中未找到主窗口创建调用");
@@ -185,5 +194,28 @@ public sealed class ApplicationLifecycleTests
         Assert.True(
             applyIndex < windowIndex,
             "主题必须在创建主窗口之前应用，否则控件会先以旧色板构造再被更新，肉眼可见闪烁");
+    }
+
+    [Fact]
+    public void AppStartup_MustNotAliasStaticTypesWithSameNamedLocals()
+    {
+        // 防回归：曾写 var themeManager = ...ThemeManager; 随后调用 themeManager.Apply(...)，
+        // C# 会把后者解析为"用变量访问静态成员"，报 CS0119 / CS0723 / CS0176。
+        //
+        // 该缺陷只在 App 的 XAML 临时项目（_wpftmp）上暴露，
+        // dotnet test 走的是另一条编译路径，因此不会被测试环节拦住 ——
+        // 靠本断言把规则固定下来。
+        //
+        // 只检查非注释行：本文件与 App.xaml.cs 的注释里会写明这个禁用写法作为说明，
+        // 按全文匹配会误报。
+        var offendingLines = ReadAppSource("App.xaml.cs")
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line =>
+                !line.StartsWith("//", StringComparison.Ordinal)
+                && line.Contains("var themeManager =", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Empty(offendingLines);
     }
 }
