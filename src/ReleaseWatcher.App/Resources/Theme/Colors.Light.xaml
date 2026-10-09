@@ -58,9 +58,19 @@
     <SolidColorBrush x:Key="Brush.Border" Color="#D2D2D7" />
     <SolidColorBrush x:Key="Brush.Border.Subtle" Color="#E5E5EA" />
 
-    <!-- 强调色与状态色 -->
-    <SolidColorBrush x:Key="Brush.Accent" Color="#007AFF" />
-    <SolidColorBrush x:Key="Brush.Accent.Hover" Color="#0A6FDB" />
+    <!--
+        强调色与状态色
+
+        Accent 由 #007AFF 提亮至 #0A84FF（2026-10-09，用户反馈"略微过暗"）。
+        提亮后与深色主题的 Accent 一致，全应用只存在一个蓝色值。
+
+        代价：白字在 #0A84FF 上的对比度约 3.0:1（原先 #007AFF 约 3.6:1），
+        仍高于 WCAG AA 对"大字号文本"的要求（3:1），
+        但 14px Regular 的按钮文字已低于 AA 正文线（4.5:1）。
+        因此 Primary 按钮文字建议 14px Semibold —— Semibold 可按大字号处理。
+    -->
+    <SolidColorBrush x:Key="Brush.Accent" Color="#0A84FF" />
+    <SolidColorBrush x:Key="Brush.Accent.Hover" Color="#3A9BFF" />
     <SolidColorBrush x:Key="Brush.Success" Color="#28A745" />
     <SolidColorBrush x:Key="Brush.Warning" Color="#E8862A" />
     <SolidColorBrush x:Key="Brush.Error" Color="#D9342B" />

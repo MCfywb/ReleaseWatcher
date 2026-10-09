@@ -46,10 +46,15 @@
     <!--
         Space.XS = 4 是原文 8px 体系里没有的值。
 
-        理由：8px 作为最小间距时，图标与文字之间、
-        Badge 内边距这类小尺寸无处安放，只能被迫用 8 或更小。
-        4 作为"图标与文字"级别的紧贴间距，符合实际需要。
-        8px 仍是**布局**的基准，仅在控件内部微调时允许 4。
+        保留理由：8px 作为**布局**最小间距合适，但控件**内部**的微调放不下。
+        典型场景（均已在 Controls.xaml 中实际使用）：
+            · CheckBox 勾选框与文字之间的图标级间距
+            · ComboBox 下拉面板与控件外框的贴合间隙
+            · 下拉列表项（ComboBoxItem）的内容内边距
+
+        这些位置若用 8，下拉面板会与控件脱开 8px，看起来像两层浮空；
+        用 0 又会让勾号紧贴文字。因此 4 不是随意取整，
+        而是"图标级 / 贴合级"间距 —— 8px 体系仍作为布局基准。
     -->
 
     <!-- 常用间距的 Thickness 便捷版本 -->
@@ -57,6 +62,45 @@
     <Thickness x:Key="Space.Padding.M">16</Thickness>
     <Thickness x:Key="Space.Padding.L">24</Thickness>
     <Thickness x:Key="Space.Padding.XL">32</Thickness>
+
+    <!--
+        输入框内容内边距：左右 Space.M（16），上下 6。
+
+        上下不对称是有意的：输入框高度 32 已定，
+        上下各 6 恰好把 14px 文字置于垂直正中且不显拥挤。
+        若上下也用 16，输入框高度会被内容撑到 48 上下，视觉过重。
+    -->
+    <Thickness x:Key="Space.Padding.Input">16,6</Thickness>
+
+    <!--
+        横向留白、纵向为 0 的便捷变体。
+
+        为什么必须单独定义：WPF 的 MarkupExtension 一旦闭合，
+        后面不允许再跟字面量。因此 "{StaticResource Space.Padding.M},0"
+        是**语法错误**（MC3044），不能靠拼接实现。
+        凡需要"某方向留白、另一方向为 0"，都得有对应 Thickness 键。
+    -->
+    <Thickness x:Key="Space.Padding.Horizontal.S">8,0</Thickness>
+    <Thickness x:Key="Space.Padding.Horizontal.M">16,0</Thickness>
+    <Thickness x:Key="Space.Padding.Horizontal.XL">32,0</Thickness>
+
+    <!--
+        纵向留白、横向为 0。UI 中最常用的一类：
+        元素之间的上下间距。
+    -->
+    <Thickness x:Key="Space.Padding.Top.XS">0,4</Thickness>
+    <Thickness x:Key="Space.Padding.Top.S">0,8</Thickness>
+    <Thickness x:Key="Space.Padding.Top.M">0,16</Thickness>
+    <Thickness x:Key="Space.Padding.Top.L">0,24</Thickness>
+
+    <!-- 元素之间的等向间距（如色块之间的 12） -->
+    <Thickness x:Key="Space.Margin.S">8</Thickness>
+    <Thickness x:Key="Space.Margin.XS">4</Thickness>
+
+    <!-- 圆角与间距体系中的语义变体（用于 Thickness 场景） -->
+    <Thickness x:Key="Space.Margin.M">16</Thickness>
+    <Thickness x:Key="Space.Margin.L">24</Thickness>
+    <Thickness x:Key="Space.Margin.XL">32</Thickness>
 
     <!-- ============================================================
          圆角（原文：Card 12 / Button 8 / Input 8 / Badge 6）
