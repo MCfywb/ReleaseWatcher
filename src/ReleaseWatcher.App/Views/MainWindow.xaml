@@ -92,10 +92,12 @@
             <!-- 与导航项同高（40），让汉堡与下方图标左对齐成一列。 -->
             <Setter Property="Height" Value="{StaticResource Size.NavItemHeight}" />
             <!--
-                宽度固定 = 收起态 sidebar 宽度（48），
-                使汉堡图标与下方导航图标处于同一 X 位置。
+                与导航项一致：上下留白各 4、整行铺满（不设固定宽度）。
+                内容靠左 —— 48 宽图标容器贴左，使汉堡图标与下方导航图标同列。
+                用户 2026-10-10 要求：展开态汉堡按钮也是整行。
             -->
-            <Setter Property="Width" Value="{StaticResource Size.SidebarWidth.Collapsed}" />
+            <Setter Property="Margin" Value="0,4,0,4" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
@@ -328,7 +330,6 @@
                     -->
                     <Button x:Name="HamburgerButton"
                             DockPanel.Dock="Top"
-                            HorizontalAlignment="Left"
                             Style="{StaticResource SidebarToggleButton}"
                             Click="ToggleSidebar_Click"
                             ToolTip="展开 / 收起侧边栏">
@@ -354,8 +355,11 @@
                                  ToolTip="设置">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <!-- 图标列宽固定（= 收起态宽度），展开/收起位置不变 -->
+                                <!-- 与上方导航项结构一致：图标列固定 48 + 文字列 Auto。
+                                     此前设置项只定义图标列、文字放隐式列（Grid.Column=1），
+                                     导致展开态「设置」文字错位。 -->
                                 <ColumnDefinition Width="48" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="SettingsIcon"
                                        Style="{StaticResource IconGlyph}"
