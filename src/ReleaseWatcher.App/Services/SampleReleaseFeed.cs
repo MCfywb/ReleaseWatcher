@@ -32,7 +32,8 @@ namespace ReleaseWatcher.App.Services;
 /// </remarks>
 public sealed class SampleReleaseFeed : IReleaseFeed
 {
-    private readonly ConcurrentDictionary<string, IReadOnlyList<Release>> _releases = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Func<IReadOnlyList<Release>>> _releaseFactories =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// 构造样例数据源并预置样例仓库。
@@ -78,7 +79,7 @@ public sealed class SampleReleaseFeed : IReleaseFeed
             [ParseRef("github", "gitignore")] = ParseVersion("1.0.0"),
         };
 
-    /// <inheritdoc />
+    /// <summary>取回指定仓库的 Release 列表。</summary>
     /// <remarks>
     /// 本实现<b>不</b>抛 <see cref="ReleaseFeedException"/>——
     /// 内存数据不会"不可达"。该异常留给真实的网络实现。
@@ -91,10 +92,16 @@ public sealed class SampleReleaseFeed : IReleaseFeed
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        // 未预置的仓库返回空集合而非抛异常：
-        // "该仓库确实没有 Release"是正常状态，不该让界面报错。
-        var releases = _releases.TryGetValue(repository.ToString(), out var found)
-            ? found
+        // 每次取数都按"当前时间"重算发布时间，而不是返回构造时算好的值。
+        //
+        // 理由：真实 feed 返回的是服务器上的绝对发布时间，
+        // 而 DateTimeOffset.Now 在应用运行期间会推移。
+        // 若把发布时间在构造时一次算定，刷新后界面上的时间会完全不变，
+        // 用户会误以为"刷新没生效"—— 这与真实数据源的行为不符。
+        // 版本号保持不变，故判定结论（有几个新版本）仍然稳定，
+        // 不破坏演示各种边界状态的目的。
+        var releases = _releaseFactories.TryGetValue(repository.ToString(), out var factory)
+            ? factory()
             : Array.Empty<Release>();
 
         return Task.FromResult(releases);
@@ -204,23 +211,23 @@ public sealed class SampleReleaseFeed : IReleaseFeed
     private void Seed()
     {
         var runtime = ParseRef("dotnet", "runtime");
-        _releases[runtime.ToString()] =
+        _releaseFactories[runtime.ToString()] = () =>
         [
-            Sample(runtime, "v9.0.0-preview.3", "Preview 3",daysAgo: 2, isPrerelease: true, assetCount: 2),
+            Sample(runtime, "v9.0.0-preview.3", "Preview 3", daysAgo: 2, isPrerelease: true, assetCount: 2),
             Sample(runtime, "v8.0.11", "8.0.11", daysAgo: 5, assetCount: 3),
             Sample(runtime, "v8.0.10", "8.0.10", daysAgo: 30, assetCount: 3),
             Sample(runtime, "v7.0.20", "7.0.20", daysAgo: 120, assetCount: 3),
         ];
 
         var aspnetcore = ParseRef("dotnet", "aspnetcore");
-        _releases[aspnetcore.ToString()] =
+        _releaseFactories[aspnetcore.ToString()] = () =>
         [
             Sample(aspnetcore, "v8.0.10", "8.0.10", daysAgo: 5, assetCount: 2),
             Sample(aspnetcore, "v8.0.9", "8.0.9", daysAgo: 28),
         ];
 
         var vscode = ParseRef("microsoft", "vscode");
-        _releases[vscode.ToString()] =
+        _releaseFactories[vscode.ToString()] = () =>
         [
             Sample(vscode, "1.95.0", "October 2024", daysAgo: 1, assetCount: 4),
             Sample(vscode, "1.94.2", "September 2024", daysAgo: 40),
@@ -228,19 +235,16 @@ public sealed class SampleReleaseFeed : IReleaseFeed
 
         // 只有预发布：正式版策略下全部候选会被过滤
         var powershell = ParseRef("PowerShell", "PowerShell");
-        _releases[powershell.ToString()] =
+        _releaseFactories[powershell.ToString()] = () =>
         [
             Sample(powershell, "v7.5.0-preview.1", "Preview 1", daysAgo: 3, isPrerelease: true),
         ];
 
         // 刻意不放入 gitignore —— 演示"仓库确实没有 Release"这一状态。
-        //
-        // 另附一个 tag 不可解析的样例到 runtime 之外的仓库会污染其他状态，
-        // 故把"tag 不可解析"的情形放在下面单独演示，不混入上面五个仓库。
         var unparsable = ParseRef("example", "unparsable-tag-demo");
-        _releases[unparsable.ToString()] =
+        _releaseFactories[unparsable.ToString()] = () =>
         [
-            // tag不是版本号 → Release.Version 为 null，无法参与版本比较
+            // tag 不是版本号 → Release.Version 为 null，无法参与版本比较
             Sample(unparsable, "nightly", "Nightly build", daysAgo: 1),
         ];
     }
