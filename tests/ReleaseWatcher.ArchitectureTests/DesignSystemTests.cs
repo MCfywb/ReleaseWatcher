@@ -641,11 +641,21 @@ public sealed class DesignSystemTests
             "未读取 AppsUseLightTheme 注册表值 —— 那是 Windows 10/11"
             + "「设置 → 个性化 → 应用模式」真正写入的位置。");
 
-        // 缺省值应为 System（跟随系统）
+        // 缺省值应为 System（跟随系统）：用户从未保存过偏好时自动获得与系统一致的外观。
+        //
+        // 2026-10-09 起 ResolveInitialTheme 改为读取 config.json（主题持久化修复），
+        // 方法签名从无参变为接受配置路径，因此断言不能再匹配某个具体方法形状 ——
+        // 改为验证「LoadSavedTheme 缺失时回落 System」这一语义。
+        // 匹配对象是回退表达式而非整条语句，容忍后续实现调整。
         Assert.True(
-            Regex.IsMatch(content, @"ResolveInitialTheme\(\)\s*=>\s*AppTheme\.System"),
-            "ResolveInitialTheme 的缺省应为 AppTheme.System（跟随系统），"
-            + "当前应用户选了\"跟随系统\"，若固定为 Light/Dark 则该选项无意义。");
+            Regex.IsMatch(
+                content,
+                @"LoadSavedTheme\([^)]*\)\s*\?\?\s*AppTheme\.System"
+                + @"|ResolveInitialTheme\([^)]*\)\s*=>\s*AppTheme\.System",
+                RegexOptions.None,
+                TimeSpan.FromSeconds(2)),
+            "未保存过主题偏好时应回落 AppTheme.System（跟随系统），"
+            + "若缺省固定为 Light/Dark，则「跟随系统」选项对首次启动的用户没有意义。");
     }
 
     [Fact]
