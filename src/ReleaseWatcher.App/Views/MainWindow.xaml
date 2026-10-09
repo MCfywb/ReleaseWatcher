@@ -81,12 +81,6 @@
             <Setter Property="HasDropShadow" Value="False" />
         </Style>
 
-        <!-- 导航图标：额外补图标与文字之间的间距（见 Sidebar 导航项）。 -->
-        <Style x:Key="NavIcon" TargetType="TextBlock"
-               BasedOn="{StaticResource IconGlyph}">
-            <Setter Property="Margin" Value="{StaticResource Space.Margin.Right.S}" />
-        </Style>
-
         <!--
             Sidebar 顶部的展开/收起按钮。
             刻意不用 ChromeButton：后者带 IsHitTestVisibleInChrome，
@@ -97,7 +91,11 @@
             <Setter Property="BorderThickness" Value="0" />
             <!-- 与导航项同高（40），让汉堡与下方图标左对齐成一列。 -->
             <Setter Property="Height" Value="{StaticResource Size.NavItemHeight}" />
-            <Setter Property="Margin" Value="{StaticResource Space.Margin.XS}" />
+            <!--
+                宽度固定 = 收起态 sidebar 宽度（48），
+                使汉堡图标与下方导航图标处于同一 X 位置。
+            -->
+            <Setter Property="Width" Value="{StaticResource Size.SidebarWidth.Collapsed}" />
             <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
@@ -180,11 +178,14 @@
             <!-- 导航项高度 40（Fluent 规范），不用输入框高度的 36。 -->
             <Setter Property="Height" Value="{StaticResource Size.NavItemHeight}" />
             <!--
-                外边距 4/内边距 16：贴近 Fluent NavigationView 的排布 ——
-                导航项之间紧凑（上下各 4），图标左侧留白 16。
+                仅保留纵向留白（上下各 4），水平留白置 0：
+                这样图标容器从 x=0 起算，与汉堡按钮（Margin=0）同行对齐成列；
+                横向不留白也契合 Fluent —— 选中/悬停背景铺满整行。
+                图标与文字的横向间距改由导航项内容里的固定 48 宽图标容器承担
+                （图标居中 → 右缘 x=32，文字 x=48，自然形成 16px 间距）。
             -->
-            <Setter Property="Margin" Value="{StaticResource Space.Margin.XS}" />
-            <Setter Property="Padding" Value="{StaticResource Space.Padding.Horizontal.M}" />
+            <Setter Property="Margin" Value="0,4,0,4" />
+            <Setter Property="Padding" Value="0" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
@@ -327,10 +328,20 @@
                     -->
                     <Button x:Name="HamburgerButton"
                             DockPanel.Dock="Top"
+                            HorizontalAlignment="Left"
                             Style="{StaticResource SidebarToggleButton}"
                             Click="ToggleSidebar_Click"
                             ToolTip="展开 / 收起侧边栏">
-                        <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE700;" />
+                        <!--
+                            图标固定在一个宽 48（= 收起态 sidebar 宽度）的容器内居中，
+                            因此展开与收起时图标的绝对位置不变，只有文字隐藏。
+                            这同时也让汉堡与下方导航图标左对齐成一列。
+                        -->
+                        <Border Width="48">
+                            <TextBlock Style="{StaticResource IconGlyph}"
+                                       HorizontalAlignment="Center"
+                                       Text="&#xE700;" />
+                        </Border>
                     </Button>
 
                     <!-- 设置项固定底部（与截图一致） -->
@@ -341,13 +352,22 @@
                                  Tag="Settings"
                                  Checked="Nav_Checked"
                                  ToolTip="设置">
-                        <StackPanel Orientation="Horizontal">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <!-- 图标列宽固定（= 收起态宽度），展开/收起位置不变 -->
+                                <ColumnDefinition Width="48" />
+                            </Grid.ColumnDefinitions>
                             <TextBlock x:Name="SettingsIcon"
-                                           Style="{StaticResource NavIcon}"
-                                           Text="&#xE713;" />
-                            <TextBlock x:Name="SettingsNavText"
+                                       Style="{StaticResource IconGlyph}"
+                                       HorizontalAlignment="Center"
+                                       Text="&#xE713;" />
+
+                            <TextBlock Grid.Column="1"
+                                       x:Name="SettingsNavText"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource Text.Body}"
                                        Text="设置" />
-                        </StackPanel>
+                        </Grid>
                     </RadioButton>
 
                     <!-- 主导航 -->
@@ -359,13 +379,21 @@
                                      IsChecked="True"
                                      Checked="Nav_Checked"
                                      ToolTip="概览">
-                            <StackPanel Orientation="Horizontal">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="48" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
                                 <TextBlock x:Name="OverviewIcon"
-                                           Style="{StaticResource NavIcon}"
+                                           Style="{StaticResource IconGlyph}"
+                                           HorizontalAlignment="Center"
                                            Text="&#xE80F;" />
-                                <TextBlock x:Name="OverviewNavText"
+                                <TextBlock Grid.Column="1"
+                                           x:Name="OverviewNavText"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource Text.Body}"
                                            Text="概览" />
-                            </StackPanel>
+                            </Grid>
                         </RadioButton>
 
                         <RadioButton x:Name="ReposNav"
@@ -374,13 +402,21 @@
                                      Tag="Repos"
                                      Checked="Nav_Checked"
                                      ToolTip="检测列表">
-                            <StackPanel Orientation="Horizontal">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="48" />
+                                <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
                                 <TextBlock x:Name="ReposIcon"
-                                           Style="{StaticResource NavIcon}"
+                                           Style="{StaticResource IconGlyph}"
+                                           HorizontalAlignment="Center"
                                            Text="&#xE71D;" />
-                                <TextBlock x:Name="ReposNavText"
+                                <TextBlock Grid.Column="1"
+                                           x:Name="ReposNavText"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource Text.Body}"
                                            Text="检测列表" />
-                            </StackPanel>
+                            </Grid>
                         </RadioButton>
 
                         <RadioButton x:Name="DownloadsNav"
@@ -389,13 +425,21 @@
                                      Tag="Downloads"
                                      Checked="Nav_Checked"
                                      ToolTip="下载">
-                            <StackPanel Orientation="Horizontal">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="48" />
+                                <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
                                 <TextBlock x:Name="DownloadsIcon"
-                                           Style="{StaticResource NavIcon}"
+                                           Style="{StaticResource IconGlyph}"
+                                           HorizontalAlignment="Center"
                                            Text="&#xE896;" />
-                                <TextBlock x:Name="DownloadsNavText"
+                                <TextBlock Grid.Column="1"
+                                           x:Name="DownloadsNavText"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource Text.Body}"
                                            Text="下载" />
-                            </StackPanel>
+                            </Grid>
                         </RadioButton>
                     </StackPanel>
                 </DockPanel>
