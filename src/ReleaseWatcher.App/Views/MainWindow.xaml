@@ -129,11 +129,46 @@
         </Style>
 
         <!--
+            窗口控制图标几何 —— Windows 11 标题栏标准图形。
+
+            用 Path 而非图标字体的原因：字形依赖 Segoe MDL2 Assets /
+            Segoe Fluent Icons 是否安装，缺失即渲染成方框（本项目反复踩坑）。
+            Path 是矢量图形，零字体依赖，任何机器上外观一致。
+
+            坐标系 10×10，与 Windows 原始字形一致；
+            最大化/还原用同一图形的两种状态（见 UpdateMaximizeIcon）。
+        -->
+        <Geometry x:Key="WindowChrome.Geometry.Minimize">M0,5 H10</Geometry>
+        <Geometry x:Key="WindowChrome.Geometry.Maximize">M0.5,0.5 H9.5 V9.5 H0.5 Z</Geometry>
+        <!-- 还原：后层方框缺右上角，前层方框缺左下角 —— Windows 的经典画法 -->
+        <Geometry x:Key="WindowChrome.Geometry.Restore">M4.5,0.5 H9.5 V5.5 H8.5 M0.5,4.5 H5.5 V9.5 H0.5 Z</Geometry>
+        <Geometry x:Key="WindowChrome.Geometry.Close">M0,0 L10,10 M10,0 L0,10</Geometry>
+
+        <!--
+            窗口控制图标：描边跟随按钮前景色，尺寸固定 10×10，在按钮内居中。
+        -->
+        <Style x:Key="WindowChromeGlyph" TargetType="Path">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Height" Value="10" />
+            <Setter Property="Stretch" Value="None" />
+            <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+            <!-- 1px 细线是 Windows 标题栏的标志；圆端点/圆拐角让线段衔接平滑 -->
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+            <Setter Property="StrokeLineJoin" Value="Round" />
+            <!-- 关键：让 1px 描边对齐整数像素，避免发虚 -->
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!--
             标题栏窗口控制按钮（最小化 / 最大化 / 关闭）。
             无边框、hover 提亮 —— 贴近系统标题栏的观感。
             颜色全部走设计系统画刷。
-            内容用 IconGlyph 的 TextBlock 而非裸字符串：字体由 TextBlock 显式承担，
-            不依赖 Button 到 ContentPresenter 的字体继承。
+            内容用 Path 而非图标字形：矢量图形不依赖字体是否安装
+            （字形缺字体即渲染成方框，见 IconGlyph 处的踩坑记录）。
         -->
         <Style x:Key="ChromeButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
@@ -274,29 +309,31 @@
 
                 <!--
                     窗口控制：最小化 / 最大化(还原) / 关闭。
-                    图标用 TextBlock 承载（字体由 IconGlyph 显式指定），
-                    不用裸字符串 Content —— 后者依赖字体继承，回退失败即显示方框。
+                    图标为 Path 矢量图形（Windows 标准字形），
+                    不依赖 Segoe 字体是否安装 —— 字体缺失会渲染成方框。
                 -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <Button x:Name="MinimizeButton"
                             Style="{StaticResource ChromeButton}"
                             Click="Minimize_Click"
                             ToolTip="最小化">
-                        <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE921;" />
+                        <Path Style="{StaticResource WindowChromeGlyph}"
+                              Data="{StaticResource WindowChrome.Geometry.Minimize}" />
                     </Button>
                     <Button x:Name="MaximizeButton"
                             Style="{StaticResource ChromeButton}"
                             Click="Maximize_Click"
                             ToolTip="最大化">
-                        <TextBlock x:Name="MaximizeIcon"
-                                   Style="{StaticResource IconGlyph}"
-                                   Text="&#xE922;" />
+                        <Path x:Name="MaximizeIcon"
+                              Style="{StaticResource WindowChromeGlyph}"
+                              Data="{StaticResource WindowChrome.Geometry.Maximize}" />
                     </Button>
                     <Button x:Name="CloseButton"
                             Style="{StaticResource ChromeButton}"
                             Click="Close_Click"
                             ToolTip="关闭">
-                        <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE8BB;" />
+                        <Path Style="{StaticResource WindowChromeGlyph}"
+                              Data="{StaticResource WindowChrome.Geometry.Close}" />
                     </Button>
                 </StackPanel>
             </Grid>

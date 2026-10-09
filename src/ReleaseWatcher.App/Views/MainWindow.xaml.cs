@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using ReleaseWatcher.App.Services;
 using ReleaseWatcher.Application.Abstractions;
 
@@ -114,9 +115,15 @@ public partial class MainWindow : Window
     /// <summary>按窗口状态切换最大化按钮图标（最大化 ↔ 还原）。</summary>
     private void UpdateMaximizeIcon()
     {
-        // 图标由 MaximizeIcon（TextBlock）承载，不设 Button.Content ——
-        // 避免依赖 Button 到 ContentPresenter 的字体继承（回退失败会显示方框）。
-        MaximizeIcon.Text = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        // 图标是 Path（矢量），不是 TextBlock —— 故赋 Data（Geometry）而非 Text。
+        // 赋 Text 会编译失败，因为 Path 没有 Text 属性。
+        // 图形定义在本窗口的 Window.Resources 里，用 this.FindResource 取
+        // （先查本窗口资源再逐级上溯；Application.Current.FindResource
+        //   只查 Application 级资源，取不到窗口级资源，会返回 null）。
+        MaximizeIcon.Data = (Geometry)this.FindResource(
+            WindowState == WindowState.Maximized
+                ? "WindowChrome.Geometry.Restore"
+                : "WindowChrome.Geometry.Maximize");
     }
 
     // ==================== Sidebar ====================
@@ -147,11 +154,12 @@ public partial class MainWindow : Window
     /// —— 漏设初始态是这类展开/收起功能最常见的缺陷。
     /// </para>
     /// <para>
-    /// 收起态为什么必须同时改三处：
-    /// <c>52 − 外边距 8×2 − 内边距 16×2 = 仅剩 4px</c>，
-    /// 放不下 16px 的图标 → 表现为"图标显示不全"。
-    /// 故收起时：宽度改 52、内边距归零、内容居中；
-    /// 且图标自身的右侧间距也要归零，否则图标偏离中心。
+    /// <b>图标位移的由来（2026-10-10 修复）：</b>
+    /// 原先收起态同时改了「宽度 / 内边距 / 对齐」三项，
+    /// 导致图标左边缘在展开态为 margin 4 + padding 16 = 20px、
+    /// 收起态为 margin 4 + (40−16)/2 = 16px，切换时跳动 4px。
+    /// 現改为：图标放在固定宽 48 的容器内居中，
+    /// 收起时只切换文字可见性 —— 图标绝对位置因此恒定。
     /// </para>
     /// </remarks>
     private void ApplySidebarState()
@@ -160,28 +168,7 @@ public partial class MainWindow : Window
             ? ThemeMetrics.SidebarWidth
             : ThemeMetrics.SidebarCollapsedWidth);
 
-        var padding = _sidebarExpanded ? ThemeMetrics.NavItemPadding : new Thickness(0);
-        var alignment = _sidebarExpanded ? HorizontalAlignment.Left : HorizontalAlignment.Center;
-
-        // 汉堡按钮与下方导航项保持同一对齐规则：展开靠左、收起居中
-        HamburgerButton.Padding = padding;
-        HamburgerButton.HorizontalContentAlignment = alignment;
-
-        foreach (var nav in new[] { OverviewNav, ReposNav, DownloadsNav, SettingsNav })
-        {
-            nav.Padding = padding;
-            nav.HorizontalContentAlignment = alignment;
-        }
-
-        // 收起时图标本身的右侧间距也要去掉 —— 那是给"图标+文字"组合用的，
-        // 只剩图标时留右边距会让图标偏离中心。
-        var iconMargin = _sidebarExpanded ? ThemeMetrics.NavIconGap : new Thickness(0);
-        foreach (var icon in new[] { OverviewIcon, ReposIcon, DownloadsIcon, SettingsIcon })
-        {
-            icon.Margin = iconMargin;
-        }
-
-        // 文字随收起隐藏；图标保留。ToolTip 继续提供文字提示。
+        // 文字随收起隐藏；图标位置不变（由固定宽度的图标容器保证）。
         var textVisibility = _sidebarExpanded ? Visibility.Visible : Visibility.Collapsed;
         OverviewNavText.Visibility = textVisibility;
         ReposNavText.Visibility = textVisibility;
