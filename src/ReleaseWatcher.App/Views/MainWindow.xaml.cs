@@ -55,6 +55,9 @@ public partial class MainWindow : Window
     /// <summary>概览页 ViewModel。</summary>
     private readonly OverviewViewModel _overviewViewModel;
 
+    /// <summary>检测列表 ViewModel（三栏选择态与响应式驱动来源）。</summary>
+    private readonly RepositoryListViewModel _repositoryList;
+
     public MainWindow(
         IAppPaths paths,
         RepositoryListViewModel repositoryList,
@@ -68,6 +71,7 @@ public partial class MainWindow : Window
 
         _paths = paths;
         _overviewViewModel = overview;
+        _repositoryList = repositoryList;
 
         // DataContext 设为概览：概览与检测列表共享同一次检测结果，
         // 两个页面各自设DataContext 会导致它们的数据源分叉。
@@ -98,6 +102,10 @@ public partial class MainWindow : Window
         // 已被 Nav_Checked 的 null 保护忽略，故此处在 InitializeComponent()
         // 之后显式设置一次。
         ShowPage(OverviewPage);
+
+        // 三栏响应式 + 选择态观察：窄屏时折叠为逐级导航，宽屏时三栏并排。
+        // 必须在 InitializeComponent() 之后（ReposPage 等子控件已创建）注册。
+        WireReposResponsive();
 
         // 让设置页的主题下拉框反映当前实际主题。
         // App.xaml.cs 在创建窗口前已应用 ResolveInitialTheme(paths.ConfigFile)，
@@ -299,6 +307,103 @@ public partial class MainWindow : Window
         page.BeginAnimation(
             UIElement.OpacityProperty,
             new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
+
+        // 切换到检测列表页时，按当前窗口宽度重算三栏布局
+        // （页签由隐藏转可见不会自动触发 SizeChanged）。
+        if (page == ReposPage)
+        {
+            UpdatePanes();
+        }
+    }
+
+    // ==================== 检测列表：三栏响应式 ====================
+
+    /// <summary>
+    /// 窄屏阈值（检测列表内容区宽度，单位与 <see cref="FrameworkElement.ActualWidth"/> 一致）。
+    /// </summary>
+    /// <remarks>
+    /// 低于此宽度时三栏改为逐级导航（仓库 → 历史 → 详情），
+    /// 符合设计文档 §1105 的 Split View 适应性约定。
+    /// </remarks>
+    private const double ReposNarrowThreshold = 960;
+
+    /// <summary>
+    /// 注册三栏的响应式与选择态监听。
+    /// </summary>
+    private void WireReposResponsive()
+    {
+        // 窗口/页面尺寸变化 → 重算宽窄模式。
+        ReposPage.SizeChanged += (_, _) => UpdatePanes();
+
+        // 选择态或可见性变化 → 窄屏下切换可见面板、宽屏下保持三栏。
+        _repositoryList.PropertyChanged += OnRepositoryListPropertyChanged;
+    }
+
+    /// <summary>
+    /// 监听检测列表 ViewModel 的选择与可见性变化，同步三栏面板。
+    /// </summary>
+    private void OnRepositoryListPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(RepositoryListViewModel.SelectedRow)
+            or nameof(RepositoryListViewModel.SelectedRelease)
+            or nameof(RepositoryListViewModel.ListVisibility)
+            or nameof(RepositoryListViewModel.EmptyStateVisibility))
+        {
+            UpdatePanes();
+        }
+    }
+
+    /// <summary>
+    /// 根据当前宽度与选择态，切换三栏的可见性与列宽。
+    /// </summary>
+    /// <remarks>
+    /// 宽屏：三栏并排，返回按钮隐藏。
+    /// 窄屏：只显示一级 —— 有选中 Release 看详情、否则有选中仓库看历史、否则看列表；
+    /// 返回按钮在"非列表级"时显示，用于逐级回退。
+    /// </remarks>
+    private void UpdatePanes()
+    {
+        if (ReposSplit is null || MasterCol is null || HistoryCol is null || DetailCol is null
+            || MasterPane is null || HistoryPane is null || DetailPane is null
+            || ReposBackButton is null || HistorySep is null || DetailSep is null)
+        {
+            return;
+        }
+
+        var narrow = ReposPage.ActualWidth > 0 && ReposPage.ActualWidth < ReposNarrowThreshold;
+
+        if (!narrow)
+        {
+            MasterCol.Width = new GridLength(1.1, GridUnitType.Star);
+            HistoryCol.Width = new GridLength(1.4, GridUnitType.Star);
+            DetailCol.Width = new GridLength(1.5, GridUnitType.Star);
+            MasterPane.Visibility = Visibility.Visible;
+            HistoryPane.Visibility = Visibility.Visible;
+            DetailPane.Visibility = Visibility.Visible;
+            HistorySep.Visibility = Visibility.Visible;
+            DetailSep.Visibility = Visibility.Visible;
+            ReposBackButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var showDetail = _repositoryList.SelectedRelease is not null;
+        var showHistory = !showDetail && _repositoryList.SelectedRow is not null;
+        var showMaster = !showDetail && !showHistory;
+
+        MasterCol.Width = new GridLength(showMaster ? 1 : 0, GridUnitType.Star);
+        HistoryCol.Width = new GridLength(showHistory ? 1 : 0, GridUnitType.Star);
+        DetailCol.Width = new GridLength(showDetail ? 1 : 0, GridUnitType.Star);
+
+        MasterPane.Visibility = showMaster ? Visibility.Visible : Visibility.Collapsed;
+        HistoryPane.Visibility = showHistory ? Visibility.Visible : Visibility.Collapsed;
+        DetailPane.Visibility = showDetail ? Visibility.Visible : Visibility.Collapsed;
+
+        // 窄屏下非活动列宽为 0，两个分隔条统一隐藏，避免残留竖线。
+        HistorySep.Visibility = Visibility.Collapsed;
+        DetailSep.Visibility = Visibility.Collapsed;
+
+        // 返回按钮仅在"非列表级"出现：详情级回退到历史、历史级回退到列表。
+        ReposBackButton.Visibility = (showDetail || showHistory) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ==================== 设置页 ====================

@@ -95,6 +95,7 @@ public static class AppServices
         // 取数方式，ViewModel 本身不必改动。
         services.AddSingleton(sp =>
             new RepositoryListViewModel(
+                sp.GetRequiredService<IReleaseFeed>(),
                 sp.GetRequiredService<ReleaseDetectionService>(),
                 () => SampleReleaseFeed.SampleRepositories,
                 repository => SampleReleaseFeed.KnownVersions.TryGetValue(repository, out var v)

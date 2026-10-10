@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 
 using ReleaseWatcher.Application.Abstractions;
 using ReleaseWatcher.Application.Services;
+using ReleaseWatcher.Domain.Entities;
 using ReleaseWatcher.Domain.ValueObjects;
 
 namespace ReleaseWatcher.App.ViewModels;
@@ -41,7 +42,21 @@ namespace ReleaseWatcher.App.ViewModels;
 /// </remarks>
 public sealed class RepositoryRowViewModel
 {
-    /// <summary>构造显示模型（正常检测结果）。</summary>
+    /// <summary>构造显示模型（正常检测结果，携带完整 Release 历史）。</summary>
+    /// <param name="result">检测结果。</param>
+    /// <param name="releases">该仓库的全部 Release 历史（来自 feed，未过滤）。</param>
+    /// <remarks>
+    /// 三栏改造后中栏/右栏需要完整历史，故比单参构造多带一份
+    /// <paramref name="releases"/>。单参构造仅用于不需要历史的场景（如概览摘要）。
+    /// </remarks>
+    public RepositoryRowViewModel(RepositoryCheckResult result, IReadOnlyList<Release> releases)
+        : this(result)
+    {
+        LatestRelease = result.LatestRelease;
+        Releases = releases ?? Array.Empty<Release>();
+    }
+
+    /// <summary>构造显示模型（正常检测结果，无 Release 历史）。</summary>
     /// <param name="result">检测结果。</param>
     public RepositoryRowViewModel(RepositoryCheckResult result)
     {
@@ -75,6 +90,9 @@ public sealed class RepositoryRowViewModel
         TotalAssetSizeText = release is null || release.Assets.Count == 0
             ? string.Empty
             : FormatSize(release.Assets.Sum(a => a.SizeInBytes));
+
+        LatestRelease = release;
+        Releases = Array.Empty<Release>();
     }
 
     private RepositoryRowViewModel(RepositoryRef repository, string errorText)
@@ -91,6 +109,10 @@ public sealed class RepositoryRowViewModel
         PublishedText = "—";
         AssetsText = "—";
         TotalAssetSizeText = string.Empty;
+
+        // 失败行没有可取的历史或最新 Release —— 让中栏/右栏显示空态而非崩溃。
+        LatestRelease = null;
+        Releases = Array.Empty<Release>();
     }
 
     /// <summary>
@@ -158,6 +180,18 @@ public sealed class RepositoryRowViewModel
     /// <summary>资产总大小文本；无资产时为空字符串。</summary>
     public string TotalAssetSizeText { get; }
 
+    /// <summary>该仓库的全部 Release 历史（含草稿/预发布，未过滤），用于中栏历史列表。</summary>
+    /// <remarks>
+    /// 与 <see cref="IReleaseFeed"/> 的约定一致：feed 如实取回原始列表，
+    /// 不在取数端过滤草稿/预发布。中栏是"历史全貌"，故完整保留，
+    /// 由界面按通道分别标注，并借 <see cref="LatestRelease"/> 标记最新合格项。
+    /// </remarks>
+    public IReadOnlyList<Release> Releases { get; }
+
+    /// <summary>本次检测选出的最新合格 Release；无合格候选时为 <c>null</c>。</summary>
+    /// <remarks>中栏历史列表用它给"最新"项做高亮标记；与 <see cref="LatestRelease"/> 一致。</remarks>
+    public Release? LatestRelease { get; }
+
     /// <summary>把字节数格式化为易读文本。</summary>
     /// <remarks>
     /// 用 invariant 的数字格式再补单位，避免不同区域设置下
@@ -219,26 +253,33 @@ public sealed class RepositoryRowViewModel
 public sealed partial class RepositoryListViewModel : ObservableObject
 {
     private readonly ReleaseDetectionService _detectionService;
+    private readonly IReleaseFeed _feed;
     private readonly Func<IReadOnlyList<RepositoryRef>> _repositoryProvider;
     private readonly Func<RepositoryRef, SemanticVersion?> _knownVersionProvider;
 
     private bool _isBusy;
     private string _lastRunText = "尚未检测";
     private Visibility _emptyStateVisibility = Visibility.Visible;
+    private RepositoryRowViewModel? _selectedRow;
+    private Release? _selectedRelease;
 
     /// <summary>构造检测列表 ViewModel。</summary>
+    /// <param name="feed">Release 数据来源（取历史列表用）。</param>
     /// <param name="detectionService">检测用例。</param>
     /// <param name="repositoryProvider">提供待检测的仓库列表。</param>
     /// <param name="knownVersionProvider">提供各仓库的"上次已知版本"，可为 <c>null</c>。</param>
     public RepositoryListViewModel(
+        IReleaseFeed feed,
         ReleaseDetectionService detectionService,
         Func<IReadOnlyList<RepositoryRef>> repositoryProvider,
         Func<RepositoryRef, SemanticVersion?> knownVersionProvider)
     {
+        ArgumentNullException.ThrowIfNull(feed);
         ArgumentNullException.ThrowIfNull(detectionService);
         ArgumentNullException.ThrowIfNull(repositoryProvider);
         ArgumentNullException.ThrowIfNull(knownVersionProvider);
 
+        _feed = feed;
         _detectionService = detectionService;
         _repositoryProvider = repositoryProvider;
         _knownVersionProvider = knownVersionProvider;
@@ -246,6 +287,11 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         // 工具包内置的 AsyncRelayCommand：异步方法包装为 ICommand，
         // 命令名与迁移前一致（RefreshCommand），XAML 绑定无需改动。
         RefreshCommand = new AsyncRelayCommand(Refresh);
+
+        // 三栏选择：左栏选中仓库、中栏选中 Release、以及窄屏下的"返回上一级"。
+        SelectRepositoryCommand = new RelayCommand<RepositoryRowViewModel>(SelectRepository);
+        SelectReleaseCommand = new RelayCommand<Release>(SelectRelease);
+        BackCommand = new RelayCommand(Back);
     }
 
     /// <summary>检测结果行集合，绑到 <c>ItemsControl.ItemsSource</c>。</summary>
@@ -253,6 +299,29 @@ public sealed partial class RepositoryListViewModel : ObservableObject
 
     /// <summary>"立即检查"命令（<see cref="AsyncRelayCommand"/> 包装 <see cref="Refresh"/>）。</summary>
     public AsyncRelayCommand RefreshCommand { get; }
+
+    /// <summary>选中左侧某一仓库（驱动中栏历史与右栏详情）。</summary>
+    public RelayCommand<RepositoryRowViewModel> SelectRepositoryCommand { get; }
+
+    /// <summary>选中中栏某一 Release（驱动右栏详情）。</summary>
+    public RelayCommand<Release> SelectReleaseCommand { get; }
+
+    /// <summary>窄屏下返回上一级（详情→历史→列表）。</summary>
+    public RelayCommand BackCommand { get; }
+
+    /// <summary>当前选中的仓库（左栏主项）；未选中为 <c>null</c>。</summary>
+    public RepositoryRowViewModel? SelectedRow
+    {
+        get => _selectedRow;
+        private set => SetProperty(ref _selectedRow, value);
+    }
+
+    /// <summary>当前选中的 Release（右栏详情目标）；未选中为 <c>null</c>。</summary>
+    public Release? SelectedRelease
+    {
+        get => _selectedRelease;
+        private set => SetProperty(ref _selectedRelease, value);
+    }
 
     /// <summary>是否正在检测；用于禁用按钮与显示加载提示。</summary>
     public bool IsBusy
@@ -337,6 +406,11 @@ public sealed partial class RepositoryListViewModel : ObservableObject
 
             // 整体替换而非逐行增删：检测结果每次都是"当前快照"，
             // 逐行 diff 只会带来无谓的闪烁。
+            // 行实例被整体重建，旧选中引用随之失效，必须一并清空，
+            // 否则窄屏视图会停在指向已丢弃对象的"上一级"。
+            SelectedRow = null;
+            SelectedRelease = null;
+
             Rows.Clear();
             foreach (var row in newRows)
             {
@@ -369,15 +443,61 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         try
         {
             var known = _knownVersionProvider(repository);
-            var result = await _detectionService.CheckAsync(repository, known);
 
-            return new RepositoryRowViewModel(result);
+            // 取回完整历史（含草稿/预发布）供三栏中栏使用，
+            // 再用纯判定方法 Evaluate 得到与界面一致的结果 ——
+            // 单次 I/O，不重复请求数据源。
+            var releases = await _feed.GetReleasesAsync(repository, CancellationToken.None);
+            var result = _detectionService.Evaluate(repository, releases, known);
+
+            return new RepositoryRowViewModel(result, releases);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return RepositoryRowViewModel.CreateError(
                 repository,
                 $"检测失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>选中某一仓库：填充中栏历史，并默认选中其最新合格 Release。</summary>
+    private void SelectRepository(RepositoryRowViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        SelectedRow = row;
+
+        // 默认让右栏有内容：优先最新合格项，没有合格项时退回历史第一条，
+        // 两者皆空（如无 Release 的仓库）则右栏呈空态。
+        SelectedRelease = row.LatestRelease ?? row.Releases.FirstOrDefault();
+    }
+
+    /// <summary>在中栏点击某一 Release：更新右栏详情。</summary>
+    private void SelectRelease(Release? release)
+    {
+        if (release is null)
+        {
+            return;
+        }
+
+        SelectedRelease = release;
+    }
+
+    /// <summary>窄屏返回上一级：详情→历史→列表，逐级回退。</summary>
+    private void Back()
+    {
+        if (SelectedRelease is not null)
+        {
+            // 从右栏详情回到中栏历史（同一仓库）。
+            SelectedRelease = null;
+        }
+        else if (SelectedRow is not null)
+        {
+            // 从中栏历史回到左栏列表。
+            SelectedRow = null;
         }
     }
 }

@@ -157,6 +157,24 @@ public class ReleaseTests
 
         Assert.Equal("dotnet/runtime@v1.0.0", release.ToString());
     }
+
+    [Fact]
+    public void Create_WithNotes_PopulatesNotes()
+    {
+        // 发布说明是展示用内容，不参与版本比较，应原样透传。
+        var release = Release.Create(Repo(), "v1.0.0", notes: "首发版本，含重大更新");
+
+        Assert.Equal("首发版本，含重大更新", release.Notes);
+    }
+
+    [Fact]
+    public void Create_WithoutNotes_DefaultsToEmptyString()
+    {
+        // 空字符串与 null 都归并为空字符串，调用方据此显示"无发布说明"而非空白格。
+        var release = Release.Create(Repo(), "v1.0.0");
+
+        Assert.Equal(string.Empty, release.Notes);
+    }
 }
 
 /// <summary>

@@ -31,7 +31,8 @@ public sealed class Release : IEquatable<Release>
         bool isPrerelease,
         DateTimeOffset publishedAt,
         IReadOnlyList<ReleaseAsset> assets,
-        Uri? htmlUrl)
+        Uri? htmlUrl,
+        string notes)
     {
         Repository = repository;
         Version = version;
@@ -42,6 +43,7 @@ public sealed class Release : IEquatable<Release>
         PublishedAt = publishedAt;
         Assets = assets;
         HtmlUrl = htmlUrl;
+        Notes = notes ?? string.Empty;
     }
 
     /// <summary>所属仓库标识。</summary>
@@ -79,6 +81,16 @@ public sealed class Release : IEquatable<Release>
     public Uri? HtmlUrl { get; }
 
     /// <summary>
+    /// 发布说明（Release Notes）文本，可为空。
+    /// </summary>
+    /// <remarks>
+    /// 与 <see cref="Assets"/> 同属"展示用但非判定用"的内容：
+    /// 不参与版本比较，只供详情面板呈现。空字符串表示发布未附说明，
+    /// 调用方应据此显示"无发布说明"而非空白格。
+    /// </remarks>
+    public string Notes { get; }
+
+    /// <summary>
     /// 构造一个 Release 实例。
     /// </summary>
     /// <param name="repository">所属仓库引用。</param>
@@ -90,6 +102,7 @@ public sealed class Release : IEquatable<Release>
     /// <param name="publishedAt">发布时间。</param>
     /// <param name="assets">稳定资产地址列表。</param>
     /// <param name="htmlUrl">发布页地址，可为空。</param>
+    /// <param name="notes">发布说明文本，可为空；为空时记为空白字符串。</param>
     /// <exception cref="ArgumentException">
     /// <paramref name="repository"/> 为空，或 <paramref name="tagName"/> 为空且无法由版本号兜底。
     /// </exception>
@@ -106,7 +119,8 @@ public sealed class Release : IEquatable<Release>
         bool? isPrerelease = null,
         DateTimeOffset? publishedAt = null,
         IReadOnlyList<ReleaseAsset>? assets = null,
-        Uri? htmlUrl = null)
+        Uri? htmlUrl = null,
+        string? notes = null)
     {
         ArgumentNullException.ThrowIfNull(repository);
 
@@ -130,7 +144,8 @@ public sealed class Release : IEquatable<Release>
             isPrerelease ?? version?.IsPrerelease ?? false,
             publishedAt ?? default,
             assets ?? Array.Empty<ReleaseAsset>(),
-            htmlUrl);
+            htmlUrl,
+            notes ?? string.Empty);
     }
 
     /// <summary>
@@ -147,7 +162,8 @@ public sealed class Release : IEquatable<Release>
         bool? isPrerelease = null,
         DateTimeOffset? publishedAt = null,
         IReadOnlyList<ReleaseAsset>? assets = null,
-        Uri? htmlUrl = null)
+        Uri? htmlUrl = null,
+        string? notes = null)
     {
         SemanticVersion.TryParse(tagName, out var version);
 
@@ -160,7 +176,8 @@ public sealed class Release : IEquatable<Release>
             isPrerelease,
             publishedAt,
             assets,
-            htmlUrl);
+            htmlUrl,
+            notes);
     }
 
     /// <inheritdoc />

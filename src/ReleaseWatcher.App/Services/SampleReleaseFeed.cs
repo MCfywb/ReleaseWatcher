@@ -146,7 +146,8 @@ public sealed class SampleReleaseFeed : IReleaseFeed
         int daysAgo,
         bool isDraft = false,
         bool? isPrerelease = null,
-        int assetCount = 0)
+        int assetCount = 0,
+        string? notes = null)
     {
         return Release.FromTag(
             repository,
@@ -155,7 +156,8 @@ public sealed class SampleReleaseFeed : IReleaseFeed
             isDraft,
             isPrerelease,
             DateTimeOffset.Now.AddDays(-daysAgo),
-            BuildAssets(repository, tag, assetCount));
+            BuildAssets(repository, tag, assetCount),
+            notes: notes);
     }
 
     /// <summary>为样例 Release 构造若干资产地址。</summary>
@@ -213,31 +215,40 @@ public sealed class SampleReleaseFeed : IReleaseFeed
         var runtime = ParseRef("dotnet", "runtime");
         _releaseFactories[runtime.ToString()] = () =>
         [
-            Sample(runtime, "v9.0.0-preview.3", "Preview 3", daysAgo: 2, isPrerelease: true, assetCount: 2),
-            Sample(runtime, "v8.0.11", "8.0.11", daysAgo: 5, assetCount: 3),
-            Sample(runtime, "v8.0.10", "8.0.10", daysAgo: 30, assetCount: 3),
-            Sample(runtime, "v7.0.20", "7.0.20", daysAgo: 120, assetCount: 3),
+            Sample(runtime, "v9.0.0-preview.3", "Preview 3", daysAgo: 2, isPrerelease: true, assetCount: 2,
+                notes: ".NET 9 第三个预览版：新增集合表达式增强、CloudExtensions 与内置 OpenAPI 文档生成。预发布版本，正式版策略下不会被标记为新版本。"),
+            Sample(runtime, "v8.0.11", "8.0.11", daysAgo: 5, assetCount: 3,
+                notes: ".NET 8 累积更新，修复若干运行时与库层面的稳定性问题。当前正式版策略下的「最新合格版本」。"),
+            Sample(runtime, "v8.0.10", "8.0.10", daysAgo: 30, assetCount: 3,
+                notes: ".NET 8 月度服务更新。"),
+            Sample(runtime, "v7.0.20", "7.0.20", daysAgo: 120, assetCount: 3,
+                notes: ".NET 7 维护版本（已结束主流支持）。"),
         ];
 
         var aspnetcore = ParseRef("dotnet", "aspnetcore");
         _releaseFactories[aspnetcore.ToString()] = () =>
         [
-            Sample(aspnetcore, "v8.0.10", "8.0.10", daysAgo: 5, assetCount: 2),
-            Sample(aspnetcore, "v8.0.9", "8.0.9", daysAgo: 28),
+            Sample(aspnetcore, "v8.0.10", "8.0.10", daysAgo: 5, assetCount: 2,
+                notes: "ASP.NET Core 8.0.10 服务更新，与 runtime 8.0.10 对齐。"),
+            Sample(aspnetcore, "v8.0.9", "8.0.9", daysAgo: 28,
+                notes: "ASP.NET Core 8.0.9 服务更新。"),
         ];
 
         var vscode = ParseRef("microsoft", "vscode");
         _releaseFactories[vscode.ToString()] = () =>
         [
-            Sample(vscode, "1.95.0", "October 2024", daysAgo: 1, assetCount: 4),
-            Sample(vscode, "1.94.2", "September 2024", daysAgo: 40),
+            Sample(vscode, "1.95.0", "October 2024", daysAgo: 1, assetCount: 4,
+                notes: "VS Code 2024 年 10 月版：新增多文件差异编辑器、终端标签重排与扩展推荐优化。"),
+            Sample(vscode, "1.94.2", "September 2024", daysAgo: 40,
+                notes: "VS Code 2024 年 9 月版补丁：修复若干编辑器崩溃问题。"),
         ];
 
         // 只有预发布：正式版策略下全部候选会被过滤
         var powershell = ParseRef("PowerShell", "PowerShell");
         _releaseFactories[powershell.ToString()] = () =>
         [
-            Sample(powershell, "v7.5.0-preview.1", "Preview 1", daysAgo: 3, isPrerelease: true),
+            Sample(powershell, "v7.5.0-preview.1", "Preview 1", daysAgo: 3, isPrerelease: true,
+                notes: "PowerShell 7.5 首个预览版：实验性原生命令补全与性能改进。正式版策略下会被过滤。"),
         ];
 
         // 刻意不放入 gitignore —— 演示"仓库确实没有 Release"这一状态。
@@ -245,7 +256,8 @@ public sealed class SampleReleaseFeed : IReleaseFeed
         _releaseFactories[unparsable.ToString()] = () =>
         [
             // tag 不是版本号 → Release.Version 为 null，无法参与版本比较
-            Sample(unparsable, "nightly", "Nightly build", daysAgo: 1),
+            Sample(unparsable, "nightly", "Nightly build", daysAgo: 1,
+                notes: "每夜构建，tag 非语义化版本号，无法参与版本比较。"),
         ];
     }
 }
