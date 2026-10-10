@@ -650,23 +650,27 @@
                                       VerticalScrollBarVisibility="Auto"
                                       Visibility="Collapsed"
                                       anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding ContentVisibility}">
-                            <StackPanel>
+                            <StackPanel x:Name="OverviewContent">
 
                                 <!--
-                                    2×2 统计卡。间距 8 走 8px 网格；四角边距各归其位，
-                                    不用双向 padding 键（相邻间隙翻倍教训，见 D-046 第 11 条）。
+                                    统计卡：宽屏一行四张，窗口变窄自动降为 2×2
+                                    （列布局由 ApplyOverviewStatLayout 按可用宽度切换）。
+                                    间距 8 走 8px 网格；边距各归其位，不用双向 padding 键
+                                    （相邻间隙翻倍教训，见 D-046 第 11 条）。
                                 -->
-                                <Grid>
+                                <Grid x:Name="OverviewStatGrid">
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
-                                    <Border Margin="0,0,8,8"
+                                    <Border x:Name="StatCardTotal"
+                                            Margin="0,0,8,0"
                                             Background="{DynamicResource Brush.Surface}"
                                             BorderBrush="{DynamicResource Brush.Border.Subtle}"
                                             BorderThickness="1"
@@ -684,8 +688,9 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Grid.Column="1"
-                                            Margin="0,0,0,8"
+                                    <Border x:Name="StatCardUpdate"
+                                            Grid.Column="1"
+                                            Margin="0,0,8,0"
                                             Background="{DynamicResource Brush.Surface}"
                                             BorderBrush="{DynamicResource Brush.Border.Subtle}"
                                             BorderThickness="1"
@@ -704,7 +709,8 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Grid.Row="1"
+                                    <Border x:Name="StatCardUpToDate"
+                                            Grid.Column="2"
                                             Margin="0,0,8,0"
                                             Background="{DynamicResource Brush.Surface}"
                                             BorderBrush="{DynamicResource Brush.Border.Subtle}"
@@ -724,8 +730,8 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Grid.Row="1"
-                                            Grid.Column="1"
+                                    <Border x:Name="StatCardError"
+                                            Grid.Column="3"
                                             Background="{DynamicResource Brush.Surface}"
                                             BorderBrush="{DynamicResource Brush.Border.Subtle}"
                                             BorderThickness="1"

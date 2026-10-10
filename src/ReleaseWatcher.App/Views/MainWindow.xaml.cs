@@ -121,6 +121,9 @@ public partial class MainWindow : Window
         // 必须在 InitializeComponent() 之后（ReposPage 等子控件已创建）注册。
         WireReposResponsive();
 
+        // 概览统计卡响应式：宽屏一行四张，可用宽度不足时降为 2×2。
+        OverviewPage.SizeChanged += (_, _) => ApplyOverviewStatLayout();
+
         // 让设置页的主题下拉框反映当前实际主题。
         // App.xaml.cs 在创建窗口前已应用 ResolveInitialTheme(paths.ConfigFile)，
         // 此处若固定 SelectedIndex=0，显示就会与实际配色不符。
@@ -437,6 +440,93 @@ public partial class MainWindow : Window
         if (page == ReposPage)
         {
             UpdatePanes();
+        }
+    }
+
+    // ==================== 概览：统计卡响应式列数 ====================
+
+    /// <summary>
+    /// 统计卡维持"一行四张"所需的最小可用内容宽度；低于此值改为 2×2。
+    /// </summary>
+    /// <remarks>
+    /// 2026-10-11 用户建议：宽屏（当前 1440 启动窗口）用一行四张，
+    /// 以减少页面高度、让"最近检测结果"更早进入视线；窄屏再自动降为两列。
+    /// 阈值取 720：可由四张卡的最小可读宽（约 150）× 4 + 间隙 24 反推。
+    /// </remarks>
+    private const double OverviewStatFourColumnMinWidth = 720;
+
+    /// <summary>统计卡当前是否为四列布局（与 XAML 默认一致）。</summary>
+    private bool _overviewStatFourColumns = true;
+
+    /// <summary>
+    /// 按可用内容宽度切换统计卡的列布局（四列一行 ↔ 2×2）。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 与三栏的 <see cref="UpdatePanes"/> 同一套做法：WPF 的 Grid 没有
+    /// "自动换行"布局，列数需按实测宽度显式切换。
+    /// </para>
+    /// <para>
+    /// <b>仅在模式变化时重建</b>：每次尺寸变化都清空并重填行列定义
+    /// 会让布局抖动，故先比较目标模式，相同则直接返回。
+    /// </para>
+    /// </remarks>
+    private void ApplyOverviewStatLayout()
+    {
+        if (OverviewStatGrid is null
+            || OverviewContent is null
+            || OverviewContent.ActualWidth <= 0)
+        {
+            // 尚未布局：保留 XAML 默认（四列），不要按 0 宽度误判为窄屏。
+            return;
+        }
+
+        var fourColumns = OverviewContent.ActualWidth >= OverviewStatFourColumnMinWidth;
+        if (fourColumns == _overviewStatFourColumns)
+        {
+            return;
+        }
+
+        _overviewStatFourColumns = fourColumns;
+
+        OverviewStatGrid.ColumnDefinitions.Clear();
+        OverviewStatGrid.RowDefinitions.Clear();
+
+        var columns = fourColumns ? 4 : 2;
+        var rows = fourColumns ? 1 : 2;
+
+        for (var i = 0; i < columns; i++)
+        {
+            OverviewStatGrid.ColumnDefinitions.Add(
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        }
+
+        for (var i = 0; i < rows; i++)
+        {
+            OverviewStatGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        }
+
+        // 卡片顺序：监控仓库 / 可用更新 / 已是最新 / 检测失败。
+        var cards = new[] { StatCardTotal, StatCardUpdate, StatCardUpToDate, StatCardError };
+
+        for (var i = 0; i < cards.Length; i++)
+        {
+            var card = cards[i];
+            if (card is null)
+            {
+                continue;
+            }
+
+            var column = fourColumns ? i : i % 2;
+            var row = fourColumns ? 0 : i / 2;
+
+            Grid.SetColumn(card, column);
+            Grid.SetRow(card, row);
+
+            // 间隙归"左/上"承担：四列时前三者留右间距，2×2 时第 0 列留右、第 0 行留下。
+            var right = fourColumns ? (i < 3 ? 8 : 0) : (column == 0 ? 8 : 0);
+            var bottom = fourColumns ? 0 : (row == 0 ? 8 : 0);
+            card.Margin = new Thickness(0, 0, right, bottom);
         }
     }
 
