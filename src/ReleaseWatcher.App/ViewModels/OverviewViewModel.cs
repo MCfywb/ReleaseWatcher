@@ -109,7 +109,13 @@ public sealed partial class OverviewViewModel : ObservableObject
     public int TotalCount
     {
         get => _totalCount;
-        private set => SetProperty(ref _totalCount, value);
+        private set
+        {
+            if (SetProperty(ref _totalCount, value))
+            {
+                OnPropertyChanged(nameof(HeaderSubtitleText));
+            }
+        }
     }
 
     /// <summary>有新版本的仓库数。</summary>
@@ -142,6 +148,7 @@ public sealed partial class OverviewViewModel : ObservableObject
             if (SetProperty(ref _lastCheckedAt, value))
             {
                 OnPropertyChanged(nameof(LastCheckedText));
+                OnPropertyChanged(nameof(HeaderSubtitleText));
             }
         }
     }
@@ -150,6 +157,14 @@ public sealed partial class OverviewViewModel : ObservableObject
     public string LastCheckedText => LastCheckedAt is null
         ? "尚未检测"
         : LastCheckedAt.Value.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture);
+
+    /// <summary>页头副标题：「上次检查：… · 监控 N 个仓库」。</summary>
+    /// <remarks>
+    /// 概览版式（2026-10-11 截图）把检测时间与监控数合成一行小字；
+    /// 汇总为一个属性，避免在 XAML 里拼 MultiBinding。
+    /// </remarks>
+    public string HeaderSubtitleText
+        => $"上次检查：{LastCheckedText} · 监控 {TotalCount} 个仓库";
 
     /// <summary>空态提示可见性。</summary>
     public Visibility EmptyStateVisibility

@@ -83,4 +83,12 @@
     <SolidColorBrush x:Key="Brush.Warning" Color="#E8862A" />
     <SolidColorBrush x:Key="Brush.Error" Color="#D9342B" />
 
+    <!--
+        状态色的"淡底"版本：概览结果徽章用同色系半透明底 + 同色文字。
+        与深色版键名一致；浅底上透明度更低（0.12 / 0.10），过深会显脏。
+    -->
+    <SolidColorBrush x:Key="Brush.Accent.Soft" Color="#0A84FF" Opacity="0.12" />
+    <SolidColorBrush x:Key="Brush.Success.Soft" Color="#28A745" Opacity="0.12" />
+    <SolidColorBrush x:Key="Brush.Error.Soft" Color="#D9342B" Opacity="0.10" />
+
 </ResourceDictionary>

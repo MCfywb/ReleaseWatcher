@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using ReleaseWatcher.Application.Abstractions;
 using ReleaseWatcher.Application.Services;
 using ReleaseWatcher.Domain.Entities;
+using ReleaseWatcher.Domain.Rules;
 using ReleaseWatcher.Domain.ValueObjects;
 
 namespace ReleaseWatcher.App.ViewModels;
@@ -68,6 +69,7 @@ public sealed class RepositoryRowViewModel
         // 同一问题若在两处判定，迟早会得出不一致的结论。
         StatusText = result.Outcome.Reason;
         HasUpdate = result.ShouldNotify;
+        IsBaseline = result.Outcome.Kind == DetectionOutcomeKind.NoBaseline;
 
         LatestVersionText = result.LatestVersionText ?? "—";
         KnownVersionText = result.KnownVersion?.ToString() ?? "（首次检测）";
@@ -164,6 +166,39 @@ public sealed class RepositoryRowViewModel
 
     /// <summary>本次比较所依据的已知版本文本。</summary>
     public string KnownVersionText { get; }
+
+    /// <summary>
+    /// 该行是否为"基准版本"（首次检测，无上次版本可比，<c>NoBaseline</c>）。
+    /// </summary>
+    /// <remarks>
+    /// 概览徽章据此区分"已是最新"（有基准且无更新）与"基准版本"（尚无基准）。
+    /// </remarks>
+    public bool IsBaseline { get; }
+
+    /// <summary>概览徽章短文案：检测失败 / 有新版本 / 基准版本 / 已是最新。</summary>
+    /// <remarks>
+    /// 与 <see cref="StatusText"/>（完整原因说明）分工：徽章只放两三个字的状态词；
+    /// 颜色由界面按 <see cref="HasUpdate"/> / <see cref="HasError"/> / <see cref="IsBaseline"/>
+    /// 取语义画刷 —— ViewModel 不引用任何画刷，保持与主题无关。
+    /// </remarks>
+    public string BadgeText => HasError
+        ? "检测失败"
+        : HasUpdate
+            ? "有新版本"
+            : IsBaseline
+                ? "基准版本"
+                : "已是最新";
+
+    /// <summary>概览版本摘要：有更新时"旧 → 新"，否则只显示当前最新版本号。</summary>
+    /// <remarks>
+    /// 有更新必然存在已知版本（否则结论是 NoBaseline 而非 UpdateAvailable），
+    /// 故"旧 → 新"两端不会出现"（首次检测）"占位符。
+    /// </remarks>
+    public string VersionSummaryText => HasError
+        ? "—"
+        : HasUpdate
+            ? $"{KnownVersionText} → {LatestVersionText}"
+            : LatestVersionText;
 
     /// <summary>原始 tag 文本。</summary>
     public string TagText { get; }

@@ -58,6 +58,34 @@
         <converters:AreEqualToVisibilityConverter x:Key="AreEqualToVisibilityConverter" />
 
         <!--
+            概览结果行的仓库图标：git 分支矢量图形。
+            用 Path 数据而非字体字形 —— 分支图形在 MDL2/Fluent 中码位不稳，
+            几何数据跨机器一致（颜色仍走主题画刷）。
+        -->
+        <Geometry x:Key="Icon.Geometry.RepoBranch">M13,14C9.64,14 8.54,15.35 8.18,16.24C9.25,16.7 10,17.76 10,19A3,3 0 0,1 7,22A3,3 0 0,1 4,19C4,17.69 4.83,16.58 6,16.16V7.84C4.83,7.42 4,6.3 4,5A3,3 0 0,1 7,2A3,3 0 0,1 10,5C10,6.3 9.17,7.42 8,7.84V13.12C8.76,12.62 9.9,12 13,12C14,12 14.5,11.5 14.5,10.5V10H13L16,7L19,10H16.5V10.5C16.5,12.44 15.08,14 13,14M7,4A1,1 0 0,0 6,5A1,1 0 0,0 7,6A1,1 0 0,0 8,5A1,1 0 0,0 7,4M7,18A1,1 0 0,0 6,19A1,1 0 0,0 7,20A1,1 0 0,0 8,19A1,1 0 0,0 7,18Z</Geometry>
+
+        <!--
+            概览"最近检测结果"的行容器：底部 1px 分隔线 + 悬停反白反馈。
+            首行（AlternationIndex=0）不画分隔线，避免与卡片圆角相切。
+            显式 x:Key 而非隐式样式 —— 隐式样式会被
+            WindowXaml_MustNotDuplicateImplicitStyleKeys 守卫拦截。
+        -->
+        <Style x:Key="OverviewResultRow" TargetType="Border">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding AlternationIndex, RelativeSource={RelativeSource AncestorType=ContentPresenter}}" Value="0">
+                    <Setter Property="BorderThickness" Value="0" />
+                </DataTrigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Surface.Hover}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!--
             图标字形：Segoe Fluent Icons 优先，回退 Segoe MDL2 Assets。
 
             两者码点基本兼容（Fluent 是 MDL2 的更新版），
@@ -560,7 +588,7 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <!-- 页头：标题 + 刷新 -->
+                        <!-- 页头：标题 + 摘要 + 立即检查（版式按 2026-10-11 用户提供截图） -->
                         <Grid Margin="{StaticResource Size.ContentPadding}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -572,7 +600,7 @@
                                            Text="概览" />
                                 <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
                                            Style="{StaticResource Text.Secondary}"
-                                           Text="{Binding LastCheckedText}" />
+                                           Text="{Binding HeaderSubtitleText}" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1"
@@ -584,8 +612,17 @@
                                          Margin="{StaticResource Space.Margin.Right.S}"
                                          Visibility="Collapsed"
                                          anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                <Button Content="刷新"
-                                        Command="{Binding RefreshCommand}" />
+                                <Button Style="{StaticResource Button.Primary}"
+                                        Command="{Binding RefreshCommand}"
+                                        ToolTip="立即检测全部监控仓库">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource IconGlyph}"
+                                                   Margin="{StaticResource Space.Margin.Right.S}"
+                                                   FontSize="14"
+                                                   Text="&#xE72C;" />
+                                        <TextBlock Text="立即检查" />
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </Grid>
 
@@ -599,34 +636,41 @@
                             <TextBlock Style="{StaticResource PlaceholderTitle}"
                                        Text="尚无监控数据" />
                             <TextBlock Style="{StaticResource PlaceholderBody}"
-                                       Text="点击右上角「刷新」开始检测已配置的仓库。当前使用内置样例数据演示，接入 GitHub 后此处将显示真实仓库。" />
+                                       Text="点击右上角「立即检查」开始检测已配置的仓库。当前使用内置样例数据演示，接入 GitHub 后此处将显示真实仓库。" />
                         </StackPanel>
 
-                        <!-- 统计内容 -->
+                        <!--
+                            统计内容 —— 版式按 2026-10-11 用户提供截图重设计：
+                            2×2 统计卡（数字按语义着色）→「最近检测结果 + 查看全部」→
+                            结果卡（图标 + 名称/版本摘要 + 徽章 + 箭头），行点击跳转检测列表页。
+                        -->
                         <ScrollViewer Grid.Row="1"
                                       Padding="{StaticResource Size.ContentPadding}"
                                       HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto"
                                       Visibility="Collapsed"
                                       anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding ContentVisibility}">
-                            <StackPanel MaxWidth="900">
-
-                                <TextBlock Style="{StaticResource Text.SectionTitle}"
-                                           Text="检测概况" />
+                            <StackPanel>
 
                                 <!--
-                                    四个统计卡片横向排列。
-                                    卡片间距用 Space.Margin.Right 单边键 ——
-                                    用双向 padding 键会让相邻卡片间隙翻倍
-                                    （见PreviewPage_InterItemGapsMustUseRightOnlyMargin 守卫）。
+                                    2×2 统计卡。间距 8 走 8px 网格；四角边距各归其位，
+                                    不用双向 padding 键（相邻间隙翻倍教训，见 D-046 第 11 条）。
                                 -->
-                                <StackPanel Margin="{StaticResource Space.Padding.Top.M}"
-                                            Orientation="Horizontal">
-                                    <Border Margin="{StaticResource Space.Margin.Right.S}"
-                                            MinWidth="150"
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <Border Margin="0,0,8,8"
                                             Background="{DynamicResource Brush.Surface}"
                                             BorderBrush="{DynamicResource Brush.Border.Subtle}"
                                             BorderThickness="1"
-                                            CornerRadius="8"
+                                            CornerRadius="{StaticResource Radius.Card}"
                                             Padding="{StaticResource Space.Padding.M}">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource Text.Secondary}"
@@ -634,32 +678,38 @@
                                             <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
                                                        Style="{StaticResource Text.Metric}"
                                                        Text="{Binding TotalCount}" />
+                                            <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                                       Style="{StaticResource Text.Caption}"
+                                                       Text="持续跟踪中" />
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Margin="{StaticResource Space.Margin.Right.S}"
-                                            MinWidth="150"
+                                    <Border Grid.Column="1"
+                                            Margin="0,0,0,8"
                                             Background="{DynamicResource Brush.Surface}"
                                             BorderBrush="{DynamicResource Brush.Border.Subtle}"
                                             BorderThickness="1"
-                                            CornerRadius="8"
+                                            CornerRadius="{StaticResource Radius.Card}"
                                             Padding="{StaticResource Space.Padding.M}">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource Text.Secondary}"
-                                                       Text="有新版本" />
+                                                       Text="可用更新" />
                                             <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
                                                        Foreground="{DynamicResource Brush.Accent}"
                                                        Style="{StaticResource Text.Metric}"
                                                        Text="{Binding UpdateCount}" />
+                                            <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                                       Style="{StaticResource Text.Caption}"
+                                                       Text="有新版本发布" />
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Margin="{StaticResource Space.Margin.Right.S}"
-                                            MinWidth="150"
+                                    <Border Grid.Row="1"
+                                            Margin="0,0,8,0"
                                             Background="{DynamicResource Brush.Surface}"
                                             BorderBrush="{DynamicResource Brush.Border.Subtle}"
                                             BorderThickness="1"
-                                            CornerRadius="8"
+                                            CornerRadius="{StaticResource Radius.Card}"
                                             Padding="{StaticResource Space.Padding.M}">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource Text.Secondary}"
@@ -668,75 +718,145 @@
                                                        Foreground="{DynamicResource Brush.Success}"
                                                        Style="{StaticResource Text.Metric}"
                                                        Text="{Binding UpToDateCount}" />
+                                            <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                                       Style="{StaticResource Text.Caption}"
+                                                       Text="当前无需更新" />
                                         </StackPanel>
                                     </Border>
 
-                                    <Border MinWidth="150"
+                                    <Border Grid.Row="1"
+                                            Grid.Column="1"
                                             Background="{DynamicResource Brush.Surface}"
                                             BorderBrush="{DynamicResource Brush.Border.Subtle}"
                                             BorderThickness="1"
-                                            CornerRadius="8"
+                                            CornerRadius="{StaticResource Radius.Card}"
                                             Padding="{StaticResource Space.Padding.M}">
                                         <StackPanel>
                                             <TextBlock Style="{StaticResource Text.Secondary}"
                                                        Text="检测失败" />
                                             <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
-                                                       Foreground="{DynamicResource Brush.Error}"
                                                        Style="{StaticResource Text.Metric}"
                                                        Text="{Binding ErrorCount}" />
+                                            <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                                       Style="{StaticResource Text.Caption}"
+                                                       Text="运行状态正常" />
                                         </StackPanel>
                                     </Border>
-                                </StackPanel>
+                                </Grid>
 
-                                <TextBlock Margin="{StaticResource Space.Padding.Top.L}"
-                                           Style="{StaticResource Text.SectionTitle}"
-                                           Text="最近检测结果" />
+                                <!-- 分区标题 + 查看全部（跳检测列表页） -->
+                                <Grid Margin="{StaticResource Space.Padding.Top.L}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource Text.SectionTitle}"
+                                               Text="最近检测结果" />
+                                    <TextBlock Grid.Column="1"
+                                               VerticalAlignment="Center">
+                                        <Hyperlink Click="ViewAllResults_Click"
+                                                   Foreground="{DynamicResource Brush.Accent}"
+                                                   TextDecorations="{x:Null}">
+                                            查看全部 →
+                                        </Hyperlink>
+                                    </TextBlock>
+                                </Grid>
 
                                 <!--
-                                    概览里只列前若干条，避免与检测列表页重复。
-                                    点击"查看全部"切到列表页。
+                                    结果卡：行 = 图标 + 名称/版本摘要 + 徽章 + 箭头。
+                                    点击行：在检测列表页选中该仓库并跳转（OverviewRow_Click）。
+                                    ClipToBounds 让行 hover 背景不溢出卡片圆角。
                                 -->
                                 <Border Margin="{StaticResource Space.Padding.Top.M}"
                                         Background="{DynamicResource Brush.Surface}"
                                         BorderBrush="{DynamicResource Brush.Border.Subtle}"
                                         BorderThickness="1"
-                                        CornerRadius="8">
-                                    <ItemsControl ItemsSource="{Binding RecentRows}">
+                                        CornerRadius="{StaticResource Radius.Card}"
+                                        ClipToBounds="True">
+                                    <ItemsControl AlternationCount="100"
+                                                  ItemsSource="{Binding RecentRows}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Grid Margin="{StaticResource Space.Margin.Right.S}">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="200" />
-                                                        <ColumnDefinition Width="90" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
+                                                <Border Style="{StaticResource OverviewResultRow}"
+                                                        MouseLeftButtonDown="OverviewRow_Click"
+                                                        Padding="{StaticResource Space.Padding.M}">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
 
-                                                    <TextBlock VerticalAlignment="Center"
-                                                               Style="{StaticResource Text.Body}"
-                                                               Text="{Binding RepositoryText}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip="{Binding RepositoryText}" />
+                                                        <!-- 仓库图标：圆角方块 + 分支矢量图形 -->
+                                                        <Border Width="36"
+                                                                Height="36"
+                                                                VerticalAlignment="Center"
+                                                                Background="{DynamicResource Brush.Background.Secondary}"
+                                                                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="{StaticResource Radius.Button}">
+                                                            <Path Width="16"
+                                                                  Height="16"
+                                                                  Data="{StaticResource Icon.Geometry.RepoBranch}"
+                                                                  Fill="{DynamicResource Brush.Text.Secondary}"
+                                                                  Stretch="Uniform" />
+                                                        </Border>
 
-                                                    <TextBlock Grid.Column="1"
-                                                               VerticalAlignment="Center"
-                                                               Style="{StaticResource Text.Body}"
-                                                               Text="{Binding LatestVersionText}" />
+                                                        <StackPanel Grid.Column="1"
+                                                                    Margin="12,0,0,0"
+                                                                    VerticalAlignment="Center">
+                                                            <TextBlock Style="{StaticResource Text.Body}"
+                                                                       Text="{Binding RepositoryText}"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       ToolTip="{Binding RepositoryText}" />
+                                                            <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                                                       Style="{StaticResource Text.Secondary}"
+                                                                       Text="{Binding VersionSummaryText}" />
+                                                        </StackPanel>
 
-                                                    <TextBlock Grid.Column="2"
-                                                               VerticalAlignment="Center"
-                                                               Style="{StaticResource Text.Secondary}"
-                                                               Text="{Binding StatusText}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip="{Binding StatusText}" />
-                                                </Grid>
+                                                        <StackPanel Grid.Column="2"
+                                                                    Orientation="Horizontal"
+                                                                    VerticalAlignment="Center">
+                                                            <!--
+                                                                徽章默认"已是最新"（绿）。HasUpdate / HasError /
+                                                                IsBaseline 三个状态互斥（见领域规则），由
+                                                                Triggers 换色；文字统一取自 BadgeText。
+                                                            -->
+                                                            <Border x:Name="Badge"
+                                                                    Margin="0,0,8,0"
+                                                                    Padding="8,3"
+                                                                    Background="{DynamicResource Brush.Success.Soft}"
+                                                                    CornerRadius="{StaticResource Radius.Badge}">
+                                                                <TextBlock x:Name="BadgeText"
+                                                                           Foreground="{DynamicResource Brush.Success}"
+                                                                           Style="{StaticResource Text.Caption}"
+                                                                           Text="{Binding BadgeText}" />
+                                                            </Border>
+                                                            <TextBlock VerticalAlignment="Center"
+                                                                       FontSize="12"
+                                                                       Foreground="{DynamicResource Brush.Text.Secondary}"
+                                                                       Text="›" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding HasUpdate}" Value="True">
+                                                        <Setter TargetName="Badge" Property="Background" Value="{DynamicResource Brush.Accent.Soft}" />
+                                                        <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource Brush.Accent}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding HasError}" Value="True">
+                                                        <Setter TargetName="Badge" Property="Background" Value="{DynamicResource Brush.Error.Soft}" />
+                                                        <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource Brush.Error}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsBaseline}" Value="True">
+                                                        <Setter TargetName="Badge" Property="Background" Value="{DynamicResource Brush.Surface.Selected}" />
+                                                        <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                 </Border>
-
-                                <TextBlock Margin="{StaticResource Space.Padding.Top.S}"
-                                           Style="{StaticResource Text.Caption}"
-                                           Text="完整列表见「检测列表」页。" />
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>

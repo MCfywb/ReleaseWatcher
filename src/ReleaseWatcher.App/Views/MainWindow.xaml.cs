@@ -1,6 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -437,6 +438,31 @@ public partial class MainWindow : Window
         {
             UpdatePanes();
         }
+    }
+
+    // ==================== 概览页跳转 ====================
+
+    /// <summary>"查看全部"：跳到检测列表页。</summary>
+    /// <remarks>
+    /// 通过勾选侧边栏导航项切换 —— Nav_Checked 会调用 ShowPage，
+    /// 同时保证侧边栏选中态与内容区一致；直接调 ShowPage 会让两者脱节。
+    /// </remarks>
+    private void ViewAllResults_Click(object sender, RoutedEventArgs e)
+        => ReposNav.IsChecked = true;
+
+    /// <summary>点击概览结果行：在检测列表页选中该仓库并跳转。</summary>
+    /// <remarks>
+    /// 先经检测列表 VM 选中（宽屏直接看到该仓库的三栏内容，
+    /// 窄屏落在历史级），再勾选导航项切页。
+    /// </remarks>
+    private void OverviewRow_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: RepositoryRowViewModel row })
+        {
+            _repositoryList.SelectRepositoryCommand.Execute(row);
+        }
+
+        ReposNav.IsChecked = true;
     }
 
     // ==================== 检测列表：三栏响应式 ====================

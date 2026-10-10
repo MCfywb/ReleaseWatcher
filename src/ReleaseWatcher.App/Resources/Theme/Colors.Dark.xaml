@@ -45,4 +45,13 @@
     <SolidColorBrush x:Key="Brush.Warning" Color="#FF9F0A" />
     <SolidColorBrush x:Key="Brush.Error" Color="#FF453A" />
 
+    <!--
+        状态色的"淡底"版本：概览结果徽章（有新版本 / 已是最新 / 检测失败）用
+        同色系半透明底 + 同色文字。键名两套主题必须一致（主题切换前提）；
+        透明度各自调校 —— 深底上 0.18 才可辨。
+    -->
+    <SolidColorBrush x:Key="Brush.Accent.Soft" Color="#0A84FF" Opacity="0.18" />
+    <SolidColorBrush x:Key="Brush.Success.Soft" Color="#32D74B" Opacity="0.18" />
+    <SolidColorBrush x:Key="Brush.Error.Soft" Color="#FF453A" Opacity="0.18" />
+
 </ResourceDictionary>
