@@ -74,7 +74,16 @@
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="{StaticResource Radius.Button}"
-                            SnapsToDevicePixels="True">
+                            SnapsToDevicePixels="True"
+                            RenderTransformOrigin="0.5,0.5">
+                        <!--
+                            按压时以中心为原点轻微缩放，给出"按下去"的反馈
+                            （见下方 IsPressed 的 EnterActions / ExitActions）。
+                            缩放原点必须居中（0.5,0.5），否则会朝左上角收缩。
+                        -->
+                        <Border.RenderTransform>
+                            <ScaleTransform x:Name="BdScale" ScaleX="1" ScaleY="1" />
+                        </Border.RenderTransform>
                         <!--
                             居中而非左对齐：按钮文字按内容宽度居中是桌面惯例。
                             Padding 已含左右 Space.M，与圆角配合留出呼吸空间。
@@ -105,6 +114,30 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Bd" Property="Background"
                                     Value="{DynamicResource Brush.Surface.Pressed}" />
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="BdScale"
+                                                         Storyboard.TargetProperty="ScaleX"
+                                                         To="0.97" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="BdScale"
+                                                         Storyboard.TargetProperty="ScaleY"
+                                                         To="0.97" Duration="0:0:0.08" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="BdScale"
+                                                         Storyboard.TargetProperty="ScaleX"
+                                                         To="1" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="BdScale"
+                                                         Storyboard.TargetProperty="ScaleY"
+                                                         To="1" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                         </Trigger>
 
                         <!-- 禁用：降低不透明度而非换色，避免与 hover 态混淆 -->
@@ -158,7 +191,11 @@
                     <Border x:Name="Bd"
                             Background="{TemplateBinding Background}"
                             CornerRadius="{StaticResource Radius.Button}"
-                            SnapsToDevicePixels="True">
+                            SnapsToDevicePixels="True"
+                            RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform>
+                            <ScaleTransform x:Name="BdScale" ScaleX="1" ScaleY="1" />
+                        </Border.RenderTransform>
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
                                           Margin="{TemplateBinding Padding}"
@@ -177,10 +214,39 @@
                             而 Base 的 Accent.Hover 已覆盖"有反馈"这一需求，
                             再加一层反而变灰。若确实需要，
                             应新增一个更深的 AccentPressed 语义色而非叠加。
+                            这里仅用"中心轻微缩放"表达按下反馈，不改底色。
                         -->
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Bd" Property="Opacity" Value="0.4" />
                             <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+
+                        <!-- 按压：以中心为原点轻微缩放，与 Base 一致的手感 -->
+                        <Trigger Property="IsPressed" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="BdScale"
+                                                         Storyboard.TargetProperty="ScaleX"
+                                                         To="0.97" Duration="0:0:0.08" />
+                                        <DoubleAnimation Storyboard.TargetName="BdScale"
+                                                         Storyboard.TargetProperty="ScaleY"
+                                                         To="0.97" Duration="0:0:0.08" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="BdScale"
+                                                         Storyboard.TargetProperty="ScaleX"
+                                                         To="1" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="BdScale"
+                                                         Storyboard.TargetProperty="ScaleY"
+                                                         To="1" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -190,6 +256,62 @@
 
     <!-- 隐式样式：默认外观为次要按钮 -->
     <Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}" />
+
+    <!-- ============================================================
+         BusyRing —— 加载指示（Windows 11 风格旋转环）
+         ============================================================ -->
+
+    <!--
+        颜色用 DynamicResource 随主题切换；旋转由模板内的 Storyboard 驱动，
+        不依赖任何第三方库。
+
+        用法：把本样式套在一个 Control 上，再配合
+        Animation.AnimatedVisibilityHelper.AnimatedVisibility 绑定 IsBusy
+        （经 BooleanToVisibilityConverter）即可在加载时淡入、结束时淡出。
+    -->
+    <Style x:Key="BusyRing" TargetType="Control">
+        <Setter Property="Width" Value="16" />
+        <Setter Property="Height" Value="16" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Control">
+                    <!--
+                        椭圆 + StrokeDashArray 形成"带缺口的环"，
+                        整体绕中心旋转即为经典旋转加载指示。
+                        缺口比例由 DashArray 决定（可见段长 / 间隙长）。
+                        旋转由 Ellipse 自身的 Loaded 触发器驱动，
+                        避免 ControlTemplate.Triggers 中 EventTrigger 对模板子元素
+                        做 TargetName 名称解析的已知不稳定性。
+                    -->
+                    <Ellipse x:Name="Arc"
+                             Width="16" Height="16"
+                             Stroke="{TemplateBinding Foreground}"
+                             StrokeThickness="2"
+                             StrokeDashArray="40 26"
+                             RenderTransformOrigin="0.5,0.5"
+                             SnapsToDevicePixels="True">
+                        <Ellipse.RenderTransform>
+                            <RotateTransform Angle="0" />
+                        </Ellipse.RenderTransform>
+                        <Ellipse.Triggers>
+                            <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Arc"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                         From="0" To="360"
+                                                         Duration="0:0:0.9"
+                                                         RepeatBehavior="Forever" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </Ellipse.Triggers>
+                    </Ellipse>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
     <!-- ============================================================
          TextBox

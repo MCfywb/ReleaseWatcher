@@ -1,6 +1,8 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using ReleaseWatcher.App.Animation;
 using ReleaseWatcher.App.Services;
 using ReleaseWatcher.App.ViewModels;
 using ReleaseWatcher.Application.Abstractions;
@@ -90,7 +92,7 @@ public partial class MainWindow : Window
         // 应用 Sidebar 初始状态（展开：宽度按设计系统、图标靠左）。
         // 注意宽度不能在 XAML 绑定：ColumnDefinition.Width 是 GridLength，
         // 而 Size.SidebarWidth 是 sys:Double，绑定会在启动时抛 XamlParseException。
-        ApplySidebarState();
+        ApplySidebarState(animate: false);
 
         // 初始页：XAML 里 IsChecked="True" 触发的 Checked 事件发生在解析期间，
         // 已被 Nav_Checked 的 null 保护忽略，故此处在 InitializeComponent()
@@ -156,14 +158,14 @@ public partial class MainWindow : Window
     /// <remarks>
     /// 收起时只显示图标（ToolTip 仍有文字提示），宽度切换到
     /// <c>Size.SidebarWidth.Collapsed</c>。
-    /// 刻意不做动画：宽度动画涉及计时器与布局抖动，
-    /// 等布局稳定后再考虑（先要"能用"，再要"好看"）。
+    /// 切换时播放平滑过渡（列宽用 <see cref="GridLengthAnimation"/> 补间，
+    /// 文字用透明度淡入淡出），避免硬切。
     /// </remarks>
     private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
     {
         _sidebarExpanded = !_sidebarExpanded;
 
-        ApplySidebarState();
+        ApplySidebarState(animate: true);
     }
 
     /// <summary>
@@ -183,21 +185,67 @@ public partial class MainWindow : Window
     /// 現改为：图标放在固定宽 48 的容器内居中，
     /// 收起时只切换文字可见性 —— 图标绝对位置因此恒定。
     /// </para>
+    /// <para>
+    /// <b>过渡（Request 3）：</b>列宽用 <see cref="GridLengthAnimation"/> 在
+    /// 200↔48 之间补间；文字在显隐时淡入淡出，避免硬切。
+    /// </para>
     /// </remarks>
-    private void ApplySidebarState()
+    private void ApplySidebarState(bool animate = false)
     {
-        SidebarColumn.Width = new GridLength(_sidebarExpanded
+        var target = _sidebarExpanded
             ? ThemeMetrics.SidebarWidth
-            : ThemeMetrics.SidebarCollapsedWidth);
+            : ThemeMetrics.SidebarCollapsedWidth;
 
-        // 文字随收起隐藏；图标位置不变（由固定宽度的图标容器保证）。
-        var textVisibility = _sidebarExpanded ? Visibility.Visible : Visibility.Collapsed;
-        OverviewNavText.Visibility = textVisibility;
-        ReposNavText.Visibility = textVisibility;
-        DownloadsNavText.Visibility = textVisibility;
-        SettingsNavText.Visibility = textVisibility;
+        if (animate && SidebarColumn is not null)
+        {
+            var anim = new GridLengthAnimation
+            {
+                From = SidebarColumn.Width,
+                To = new GridLength(target, GridUnitType.Pixel),
+                Duration = TimeSpan.FromMilliseconds(200)
+            };
+            SidebarColumn.BeginAnimation(ColumnDefinition.WidthProperty, anim);
+        }
+        else if (SidebarColumn is not null)
+        {
+            SidebarColumn.Width = new GridLength(target);
+        }
+
+        // 文字随收起隐藏、随展开显示，并配合透明度淡入淡出。
+        AnimateNavText(OverviewNavText, _sidebarExpanded);
+        AnimateNavText(ReposNavText, _sidebarExpanded);
+        AnimateNavText(DownloadsNavText, _sidebarExpanded);
+        AnimateNavText(SettingsNavText, _sidebarExpanded);
 
         StatusText.Text = _sidebarExpanded ? "侧边栏已展开" : "侧边栏已收起";
+    }
+
+    /// <summary>
+    /// 让导航文字在显隐时淡入淡出，而不是硬切。
+    /// </summary>
+    private void AnimateNavText(UIElement text, bool expand)
+    {
+        if (expand)
+        {
+            text.Visibility = Visibility.Visible;
+            text.BeginAnimation(
+                UIElement.OpacityProperty,
+                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)));
+        }
+        else
+        {
+            var fade = new DoubleAnimation(
+                text.Opacity, 0, TimeSpan.FromMilliseconds(120));
+            fade.Completed += (_, _) =>
+            {
+                // 仅在仍处于收起意图时才收起，避免快速来回切换误收起文字。
+                if (!_sidebarExpanded)
+                {
+                    text.Visibility = Visibility.Collapsed;
+                }
+            };
+            text.BeginAnimation(UIElement.OpacityProperty, fade);
+        }
     }
 
     /// <summary>
@@ -238,13 +286,19 @@ public partial class MainWindow : Window
         });
     }
 
-    /// <summary>只显示指定页，其余隐藏。</summary>
+    /// <summary>只显示指定页，其余隐藏，并对新页面做淡入过渡（Request 3）。</summary>
     private void ShowPage(UIElement page)
     {
         OverviewPage.Visibility = page == OverviewPage ? Visibility.Visible : Visibility.Collapsed;
         ReposPage.Visibility = page == ReposPage ? Visibility.Visible : Visibility.Collapsed;
         DownloadsPage.Visibility = page == DownloadsPage ? Visibility.Visible : Visibility.Collapsed;
         SettingsPage.Visibility = page == SettingsPage ? Visibility.Visible : Visibility.Collapsed;
+
+        // 新页面从 0 淡入到 1，给出页面切换的轻量过渡（Windows / Fluent 风格）。
+        page.Opacity = 0;
+        page.BeginAnimation(
+            UIElement.OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
     }
 
     // ==================== 设置页 ====================

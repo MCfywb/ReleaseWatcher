@@ -2,6 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:anim="clr-namespace:ReleaseWatcher.App.Animation"
+        xmlns:controls="clr-namespace:System.Windows.Controls;assembly=PresentationFramework"
         WindowStyle="None"
         ResizeMode="CanResize"
         Title="ReleaseWatcher">
@@ -35,6 +37,13 @@
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
+
+        <!--
+            bool → Visibility 转换：用于把 ViewModel 的 IsBusy（bool）
+            接到 AnimatedVisibilityHelper.AnimatedVisibility（Visibility），
+            实现"加载时淡入旋转环、结束时淡出"。
+        -->
+        <controls:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
         <!--
             图标字形：Segoe Fluent Icons 优先，回退 Segoe MDL2 Assets。
@@ -535,10 +544,18 @@
                                            Text="{Binding LastCheckedText}" />
                             </StackPanel>
 
-                            <Button Grid.Column="1"
-                                    VerticalAlignment="Center"
-                                    Content="刷新"
-                                    Command="{Binding RefreshCommand}" />
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <!-- 加载指示：IsBusy 为真时淡入旋转环，结束淡出 -->
+                                <Control Style="{StaticResource BusyRing}"
+                                         VerticalAlignment="Center"
+                                         Margin="{StaticResource Space.Margin.Right.S}"
+                                         Visibility="Collapsed"
+                                         anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                <Button Content="刷新"
+                                        Command="{Binding RefreshCommand}" />
+                            </StackPanel>
                         </Grid>
 
                         <!-- 空态：无仓库时显示引导 -->
@@ -546,7 +563,8 @@
                                     VerticalAlignment="Center"
                                     HorizontalAlignment="Center"
                                     MaxWidth="560"
-                                    Visibility="{Binding EmptyStateVisibility}">
+                                    Visibility="Visible"
+                                    anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding EmptyStateVisibility}">
                             <TextBlock Style="{StaticResource PlaceholderTitle}"
                                        Text="尚无监控数据" />
                             <TextBlock Style="{StaticResource PlaceholderBody}"
@@ -557,7 +575,8 @@
                         <ScrollViewer Grid.Row="1"
                                       Padding="{StaticResource Size.ContentPadding}"
                                       HorizontalScrollBarVisibility="Disabled"
-                                      Visibility="{Binding ContentVisibility}">
+                                      Visibility="Collapsed"
+                                      anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding ContentVisibility}">
                             <StackPanel MaxWidth="900">
 
                                 <TextBlock Style="{StaticResource Text.SectionTitle}"
@@ -721,10 +740,18 @@
                                            Text="{Binding LastRunText}" />
                             </StackPanel>
 
-                            <Button Grid.Column="1"
-                                    VerticalAlignment="Center"
-                                    Content="立即检查"
-                                    Command="{Binding RefreshCommand}" />
+                            <StackPanel Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <!-- 加载指示：IsBusy 为真时淡入旋转环，结束淡出 -->
+                                <Control Style="{StaticResource BusyRing}"
+                                         VerticalAlignment="Center"
+                                         Margin="{StaticResource Space.Margin.Right.S}"
+                                         Visibility="Collapsed"
+                                         anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                <Button Content="立即检查"
+                                        Command="{Binding RefreshCommand}" />
+                            </StackPanel>
                         </Grid>
 
                         <!-- 空态 -->
@@ -732,7 +759,8 @@
                                     VerticalAlignment="Center"
                                     HorizontalAlignment="Center"
                                     MaxWidth="560"
-                                    Visibility="{Binding EmptyStateVisibility}">
+                                    Visibility="Visible"
+                                    anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding EmptyStateVisibility}">
                             <TextBlock Style="{StaticResource PlaceholderTitle}"
                                        Text="尚无监控仓库" />
                             <TextBlock Style="{StaticResource PlaceholderBody}"
@@ -751,7 +779,8 @@
                         <ScrollViewer Grid.Row="1"
                                       Padding="{StaticResource Size.ContentPadding}"
                                       HorizontalScrollBarVisibility="Disabled"
-                                      Visibility="{Binding ListVisibility}">
+                                      Visibility="Collapsed"
+                                      anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding ListVisibility}">
                             <StackPanel MaxWidth="1100">
 
                                 <!-- 表头 -->
