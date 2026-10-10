@@ -1,8 +1,10 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Navigation;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using ReleaseWatcher.App.Animation;
@@ -120,6 +122,13 @@ public partial class MainWindow : Window
         // 三栏响应式 + 选择态观察：窄屏时折叠为逐级导航，宽屏时三栏并排。
         // 必须在 InitializeComponent() 之后（ReposPage 等子控件已创建）注册。
         WireReposResponsive();
+
+        // 三栏宽度比例：读取用户上次拖拽保存的值（config.json layout.reposColumns），
+        // 没有则用默认比例。拖拽结束（DragCompleted）时把新的星型宽度归一化保存。
+        _reposColumnRatios = LayoutPreferences.LoadReposColumnRatios(paths.ConfigFile)
+            ?? [0.28, 0.33, 0.39];
+        HistorySplitter.DragCompleted += (_, _) => SaveReposColumnRatios();
+        DetailSplitter.DragCompleted += (_, _) => SaveReposColumnRatios();
 
         // 概览统计卡响应式：宽屏一行四张，可用宽度不足时降为 2×2。
         OverviewPage.SizeChanged += (_, _) => ApplyOverviewStatLayout();
@@ -436,9 +445,12 @@ public partial class MainWindow : Window
             new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
 
         // 切换到检测列表页时，按当前窗口宽度重算三栏布局
-        // （页签由隐藏转可见不会自动触发 SizeChanged）。
+        // （页签由隐藏转可见不会自动触发 SizeChanged）；
+        // 并确保有选中仓库（默认选第一个有可用更新的，见 EnsureDefaultSelection），
+        // 让三栏立即有内容而不是两块空白。
         if (page == ReposPage)
         {
+            _repositoryList.EnsureDefaultSelection();
             UpdatePanes();
         }
     }
@@ -530,6 +542,23 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>"查看完整 Release"：用系统默认浏览器打开发布页。</summary>
+    private void ReleaseLink_RequestNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri)
+            {
+                UseShellExecute = true,
+            });
+            e.Handled = true;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or PlatformNotSupportedException)
+        {
+            // 无默认浏览器等环境问题：忽略，不打断界面。
+        }
+    }
+
     // ==================== 概览页跳转 ====================
 
     /// <summary>"查看全部"：跳到检测列表页。</summary>
@@ -565,6 +594,54 @@ public partial class MainWindow : Window
     /// 符合设计文档 §1105 的 Split View 适应性约定。
     /// </remarks>
     private const double ReposNarrowThreshold = 960;
+
+    /// <summary>
+    /// 检测列表三栏的宽度比例（三者和为 1）。
+    /// </summary>
+    /// <remarks>
+    /// 启动时从 config.json 读取用户上次拖拽的结果，缺省为 0.28 / 0.33 / 0.39；
+    /// GridSplitter 拖拽结束（DragCompleted）时把新的星型宽度归一化后写回。
+    /// 窗口缩放不破坏比例 —— 星型宽度天然等比缩放。
+    /// </remarks>
+    private double[] _reposColumnRatios;
+
+    /// <summary>把当前三栏比例写回 config.json（拖拽结束时调用）。</summary>
+    private void SaveReposColumnRatios()
+    {
+        if (MasterCol is null || HistoryCol is null || DetailCol is null)
+        {
+            return;
+        }
+
+        if (!MasterCol.Width.IsStar || !HistoryCol.Width.IsStar || !DetailCol.Width.IsStar)
+        {
+            // 窄屏模式下列宽是 0*/1*，那不是用户的比例意图，不保存。
+            return;
+        }
+
+        var total = MasterCol.Width.Value + HistoryCol.Width.Value + DetailCol.Width.Value;
+        if (total <= 0)
+        {
+            return;
+        }
+
+        _reposColumnRatios =
+        [
+            MasterCol.Width.Value / total,
+            HistoryCol.Width.Value / total,
+            DetailCol.Width.Value / total,
+        ];
+
+        LayoutPreferences.SaveReposColumnRatios(_paths.ConfigFile, _reposColumnRatios);
+    }
+
+    /// <summary>把保存的三栏比例应用到列宽（星型值；各栏 MinWidth 在 XAML 中兜底）。</summary>
+    private void ApplyReposColumnRatios()
+    {
+        MasterCol.Width = new GridLength(_reposColumnRatios[0], GridUnitType.Star);
+        HistoryCol.Width = new GridLength(_reposColumnRatios[1], GridUnitType.Star);
+        DetailCol.Width = new GridLength(_reposColumnRatios[2], GridUnitType.Star);
+    }
 
     /// <summary>
     /// 注册三栏的响应式与选择态监听。
@@ -604,7 +681,7 @@ public partial class MainWindow : Window
     {
         if (ReposSplit is null || MasterCol is null || HistoryCol is null || DetailCol is null
             || MasterPane is null || HistoryPane is null || DetailPane is null
-            || ReposBackButton is null || HistorySep is null || DetailSep is null)
+            || ReposBackButton is null || HistorySplitter is null || DetailSplitter is null)
         {
             return;
         }
@@ -613,14 +690,14 @@ public partial class MainWindow : Window
 
         if (!narrow)
         {
-            MasterCol.Width = new GridLength(1.1, GridUnitType.Star);
-            HistoryCol.Width = new GridLength(1.4, GridUnitType.Star);
-            DetailCol.Width = new GridLength(1.5, GridUnitType.Star);
+            // 宽屏：三栏并排，比例用用户上次拖拽保存的值（星型宽度随窗口等比缩放）；
+            // 各栏 MinWidth（XAML）保证拖拽与缩窗时仓库名不被挤成不可读的缩略文字。
+            ApplyReposColumnRatios();
             MasterPane.Visibility = Visibility.Visible;
             HistoryPane.Visibility = Visibility.Visible;
             DetailPane.Visibility = Visibility.Visible;
-            HistorySep.Visibility = Visibility.Visible;
-            DetailSep.Visibility = Visibility.Visible;
+            HistorySplitter.Visibility = Visibility.Visible;
+            DetailSplitter.Visibility = Visibility.Visible;
             ReposBackButton.Visibility = Visibility.Collapsed;
             return;
         }
@@ -637,9 +714,9 @@ public partial class MainWindow : Window
         HistoryPane.Visibility = showHistory ? Visibility.Visible : Visibility.Collapsed;
         DetailPane.Visibility = showDetail ? Visibility.Visible : Visibility.Collapsed;
 
-        // 窄屏下非活动列宽为 0，两个分隔条统一隐藏，避免残留竖线。
-        HistorySep.Visibility = Visibility.Collapsed;
-        DetailSep.Visibility = Visibility.Collapsed;
+        // 窄屏下非活动列宽为 0，分割条与分隔线一并隐藏，避免残留可拖拽区域。
+        HistorySplitter.Visibility = Visibility.Collapsed;
+        DetailSplitter.Visibility = Visibility.Collapsed;
 
         // 返回按钮仅在"非列表级"出现：详情级回退到历史、历史级回退到列表。
         ReposBackButton.Visibility = (showDetail || showHistory) ? Visibility.Visible : Visibility.Collapsed;

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 
@@ -54,7 +55,12 @@ public sealed class RepositoryRowViewModel
         : this(result)
     {
         LatestRelease = result.LatestRelease;
-        Releases = releases ?? Array.Empty<Release>();
+
+        // 历史按发布时间从新到旧排列：中栏"最新在顶"是固定展示约定，
+        // 与"最新合格项"（LatestRelease）天然对应。只调顺序、不增删内容。
+        Releases = (releases ?? Array.Empty<Release>())
+            .OrderByDescending(r => r.PublishedAt)
+            .ToArray();
     }
 
     /// <summary>构造显示模型（正常检测结果，无 Release 历史）。</summary>
@@ -70,6 +76,7 @@ public sealed class RepositoryRowViewModel
         StatusText = result.Outcome.Reason;
         HasUpdate = result.ShouldNotify;
         IsBaseline = result.Outcome.Kind == DetectionOutcomeKind.NoBaseline;
+        OutcomeKind = result.Outcome.Kind;
 
         LatestVersionText = result.LatestVersionText ?? "—";
         KnownVersionText = result.KnownVersion?.ToString() ?? "（首次检测）";
@@ -175,19 +182,45 @@ public sealed class RepositoryRowViewModel
     /// </remarks>
     public bool IsBaseline { get; }
 
-    /// <summary>概览徽章短文案：检测失败 / 有新版本 / 基准版本 / 已是最新。</summary>
+    /// <summary>领域层判定结论；用于把状态压缩成更短的行内文案。</summary>
+    public DetectionOutcomeKind OutcomeKind { get; }
+
+    /// <summary>
+    /// 是否"没有可展示的 Release"（无候选 / 仅草稿 / 仅预发布 / 版本无法解析）。
+    /// </summary>
     /// <remarks>
-    /// 与 <see cref="StatusText"/>（完整原因说明）分工：徽章只放两三个字的状态词；
-    /// 颜色由界面按 <see cref="HasUpdate"/> / <see cref="HasError"/> / <see cref="IsBaseline"/>
-    /// 取语义画刷 —— ViewModel 不引用任何画刷，保持与主题无关。
+    /// 这类行既不是"已是最新"（绿）也不是"检测失败"（红），
+    /// 界面徽章应取中性色，避免把"数据源没东西"误读成"一切正常"。
+    /// </remarks>
+    public bool IsNoRelease =>
+        OutcomeKind is DetectionOutcomeKind.NoCandidate
+            or DetectionOutcomeKind.IgnoredDraft
+            or DetectionOutcomeKind.IgnoredPrerelease
+            or DetectionOutcomeKind.IgnoredUnparsableTag;
+
+    /// <summary>状态短文案：有新版本 / 已是最新 / 基准版本 / 暂无 Release / 检测失败 等。</summary>
+    /// <remarks>
+    /// <para>
+    /// 与 <see cref="StatusText"/>（领域层完整原因说明）分工：
+    /// 列表行只放两三个字的状态词，长说明留给右侧详情栏，
+    /// 避免第一栏文字互相挤压（2026-10-11 用户要求）。
+    /// 颜色由界面按 <see cref="HasUpdate"/> / <see cref="HasError"/> /
+    /// <see cref="IsBaseline"/> / <see cref="IsNoRelease"/> 取语义画刷。
+    /// </para>
     /// </remarks>
     public string BadgeText => HasError
         ? "检测失败"
         : HasUpdate
             ? "有新版本"
-            : IsBaseline
-                ? "基准版本"
-                : "已是最新";
+            : OutcomeKind switch
+            {
+                DetectionOutcomeKind.NoBaseline => "基准版本",
+                DetectionOutcomeKind.NoCandidate => "暂无 Release",
+                DetectionOutcomeKind.IgnoredDraft => "仅草稿",
+                DetectionOutcomeKind.IgnoredPrerelease => "仅预发布",
+                DetectionOutcomeKind.IgnoredUnparsableTag => "版本无法解析",
+                _ => "已是最新",
+            };
 
     /// <summary>概览版本摘要：有更新时"旧 → 新"，否则只显示当前最新版本号。</summary>
     /// <remarks>
@@ -327,6 +360,9 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         SelectRepositoryCommand = new RelayCommand<RepositoryRowViewModel>(SelectRepository);
         SelectReleaseCommand = new RelayCommand<Release>(SelectRelease);
         BackCommand = new RelayCommand(Back);
+
+        // 逐资产下载（过渡实现：交给系统默认浏览器，见 DownloadAsset 注释）。
+        DownloadAssetCommand = new RelayCommand<ReleaseAsset>(DownloadAsset);
     }
 
     /// <summary>检测结果行集合，绑到 <c>ItemsControl.ItemsSource</c>。</summary>
@@ -344,18 +380,56 @@ public sealed partial class RepositoryListViewModel : ObservableObject
     /// <summary>窄屏下返回上一级（详情→历史→列表）。</summary>
     public RelayCommand BackCommand { get; }
 
+    /// <summary>"下载该资产"命令（参数为单个 <see cref="ReleaseAsset"/>）。</summary>
+    public RelayCommand<ReleaseAsset> DownloadAssetCommand { get; }
+
     /// <summary>当前选中的仓库（左栏主项）；未选中为 <c>null</c>。</summary>
+    /// <remarks>
+    /// <para>
+    /// setter 公开供左栏 <c>ListBox.SelectedItem</c> 双向绑定直接写入
+    /// （用户点击行即选中，无需逐行挂命令）。
+    /// </para>
+    /// <para>
+    /// 选中仓库的同时默认选中其最新合格 Release ——
+    /// 保证右栏立即有内容，用户不会先看到两块空白（2026-10-11 用户要求）。
+    /// </para>
+    /// </remarks>
     public RepositoryRowViewModel? SelectedRow
     {
         get => _selectedRow;
-        private set => SetProperty(ref _selectedRow, value);
+        set
+        {
+            if (!SetProperty(ref _selectedRow, value))
+            {
+                return;
+            }
+
+            RaiseSelectionVisualState();
+
+            if (value is not null)
+            {
+                SelectedRelease = value.LatestRelease ?? value.Releases.FirstOrDefault();
+            }
+        }
     }
 
     /// <summary>当前选中的 Release（右栏详情目标）；未选中为 <c>null</c>。</summary>
+    /// <remarks>
+    /// setter 公开供中栏 <c>ListBox.SelectedItem</c> 双向绑定直接写入：
+    /// 用户点选某个 Release 后右栏同步更新。
+    /// </remarks>
     public Release? SelectedRelease
     {
         get => _selectedRelease;
-        private set => SetProperty(ref _selectedRelease, value);
+        set
+        {
+            if (!SetProperty(ref _selectedRelease, value))
+            {
+                return;
+            }
+
+            RaiseSelectionVisualState();
+        }
     }
 
     /// <summary>是否正在检测；用于禁用按钮与显示加载提示。</summary>
@@ -402,6 +476,136 @@ public sealed partial class RepositoryListViewModel : ObservableObject
     /// 也不必为它新增一个类型。
     /// </remarks>
     public Visibility ListVisibility { get; private set; } = Visibility.Collapsed;
+
+    // ==================== 三栏空态与派生显示状态 ====================
+    // 以下属性全部由 SelectedRow / SelectedRelease 推导，
+    // 并在二者变化时经 RaiseSelectionVisualState 统一通知。
+
+    /// <summary>中栏历史列表的可见性：有选中仓库且其确有 Release 时可见。</summary>
+    public Visibility HistoryListVisibility
+        => SelectedRow is not null && SelectedRow.Releases.Count > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    /// <summary>中栏空态文案；<c>null</c> 表示不显示空态。</summary>
+    public string? HistoryEmptyText => SelectedRow is null
+        ? "选择一个仓库以查看 Release 历史"
+        : SelectedRow.Releases.Count == 0
+            ? "该仓库暂无符合条件的 Release"
+            : null;
+
+    /// <summary>中栏空态的可见性（与 <see cref="HistoryEmptyText"/> 联动）。</summary>
+    public Visibility HistoryEmptyVisibility
+        => HistoryEmptyText is null ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>右栏详情内容的可见性：有选中 Release 时可见。</summary>
+    public Visibility DetailContentVisibility
+        => SelectedRelease is not null ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>右栏空态文案；<c>null</c> 表示不显示空态。</summary>
+    public string? DetailEmptyText => SelectedRow is null
+        ? "选择一个仓库以查看版本详情"
+        : SelectedRelease is null
+            ? "该仓库暂无符合条件的 Release"
+            : null;
+
+    /// <summary>右栏空态的可见性（与 <see cref="DetailEmptyText"/> 联动）。</summary>
+    public Visibility DetailEmptyVisibility
+        => DetailEmptyText is null ? Visibility.Collapsed : Visibility.Visible;
+
+    /// <summary>下载资产列表的可见性：所选 Release 确有资产时可见。</summary>
+    public Visibility AssetListVisibility
+        => SelectedRelease is not null && SelectedRelease.Assets.Count > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    /// <summary>"没有可下载资产"空态的可见性。</summary>
+    public Visibility AssetEmptyVisibility
+        => SelectedRelease is not null && SelectedRelease.Assets.Count == 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    /// <summary>右栏发布通道徽章文案：草稿 / 预发布 / 正式版。</summary>
+    public string DetailChannelText => SelectedRelease is null
+        ? string.Empty
+        : SelectedRelease.IsDraft
+            ? "草稿"
+            : SelectedRelease.IsPrerelease
+                ? "预发布"
+                : "正式版";
+
+    /// <summary>
+    /// "有新版本"徽章的可见性：仅当所选 Release 就是该仓库的最新合格项、
+    /// 且该仓库确实有更新时显示。
+    /// </summary>
+    public Visibility DetailUpdatePillVisibility
+        => SelectedRow is not null
+           && SelectedRow.HasUpdate
+           && ReferenceEquals(SelectedRelease, SelectedRow.LatestRelease)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    /// <summary>右栏发布说明正文；无说明时给明确占位文案而非空白。</summary>
+    /// <remarks>
+    /// 领域约定 Notes 为空字符串表示"未附说明"（见 <c>Release.Notes</c>），
+    /// 空白格会被误读为"内容还没加载"。
+    /// </remarks>
+    public string DetailNotes
+        => string.IsNullOrEmpty(SelectedRelease?.Notes)
+            ? "本次发布未附带说明。"
+            : SelectedRelease!.Notes;
+
+    /// <summary>
+    /// 若当前没有选中仓库，则默认选中"第一个有可用更新"的仓库。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 目标：进入检测列表页时三栏立即有内容，而不是两块大面积空白
+    /// （2026-10-11 用户要求）。优先级：第一个有更新 → 第一个有 Release →
+    /// 第一行。
+    /// </para>
+    /// <para>
+    /// 已有选择时不覆盖，尊重用户的浏览状态；检测刷新会整体重建行并
+    /// 清空选择，因此刷新后自然落到默认项。
+    /// </para>
+    /// </remarks>
+    public void EnsureDefaultSelection()
+    {
+        if (Rows.Count == 0)
+        {
+            SelectedRow = null;
+            SelectedRelease = null;
+            return;
+        }
+
+        if (SelectedRow is not null)
+        {
+            return;
+        }
+
+        var row = Rows.FirstOrDefault(r => r.HasUpdate)
+            ?? Rows.FirstOrDefault(r => r.Releases.Count > 0)
+            ?? Rows[0];
+
+        // setter 会连带默认选中其最新合格 Release。
+        SelectedRow = row;
+    }
+
+    /// <summary>选中态变化后，统一通知所有派生显示属性。</summary>
+    private void RaiseSelectionVisualState()
+    {
+        OnPropertyChanged(nameof(HistoryListVisibility));
+        OnPropertyChanged(nameof(HistoryEmptyText));
+        OnPropertyChanged(nameof(HistoryEmptyVisibility));
+        OnPropertyChanged(nameof(DetailContentVisibility));
+        OnPropertyChanged(nameof(DetailEmptyText));
+        OnPropertyChanged(nameof(DetailEmptyVisibility));
+        OnPropertyChanged(nameof(AssetListVisibility));
+        OnPropertyChanged(nameof(AssetEmptyVisibility));
+        OnPropertyChanged(nameof(DetailChannelText));
+        OnPropertyChanged(nameof(DetailUpdatePillVisibility));
+        OnPropertyChanged(nameof(DetailNotes));
+    }
 
     /// <summary>
     /// 执行一轮检测，刷新 <see cref="Rows"/>。
@@ -459,6 +663,10 @@ public sealed partial class RepositoryListViewModel : ObservableObject
                   + $"（{DateTime.Now:HH:mm:ss}）";
 
             EmptyStateVisibility = Rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            // 行已整体重建且选择已清空：默认选中第一个有可用更新的仓库，
+            // 让三栏立即有内容而不是两块空白（2026-10-11 用户要求）。
+            EnsureDefaultSelection();
         }
         finally
         {
@@ -495,7 +703,11 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         }
     }
 
-    /// <summary>选中某一仓库：填充中栏历史，并默认选中其最新合格 Release。</summary>
+    /// <summary>选中某一仓库：右栏默认落到其最新合格 Release。</summary>
+    /// <remarks>
+    /// 默认选中的连带逻辑已收敛到 <see cref="SelectedRow"/> 的 setter
+    /// （左栏 ListBox 双向绑定走同一条路径），此处只负责入口判空。
+    /// </remarks>
     private void SelectRepository(RepositoryRowViewModel? row)
     {
         if (row is null)
@@ -504,10 +716,6 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         }
 
         SelectedRow = row;
-
-        // 默认让右栏有内容：优先最新合格项，没有合格项时退回历史第一条，
-        // 两者皆空（如无 Release 的仓库）则右栏呈空态。
-        SelectedRelease = row.LatestRelease ?? row.Releases.FirstOrDefault();
     }
 
     /// <summary>在中栏点击某一 Release：更新右栏详情。</summary>
@@ -533,6 +741,42 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         {
             // 从中栏历史回到左栏列表。
             SelectedRow = null;
+        }
+    }
+
+    /// <summary>
+    /// 下载单个资产（过渡实现：把稳定 Asset URL 交给系统默认浏览器）。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// aria2 下载引擎尚未接入（Infrastructure/Aria2 计划中）。在此之前，
+    /// "下载"的最小可用实现是把稳定 Asset URL 交给系统默认处理程序 ——
+    /// 用户能真实拿到文件，且按钮与资产一一对应，
+    /// 不存在"没有可下载文件却摆一个大禁用按钮"的问题
+    /// （2026-10-11 用户要求）。
+    /// </para>
+    /// <para>
+    /// 打开失败（无默认浏览器等环境问题）静默忽略：
+    /// 这是辅助操作，不值得为它打断界面。
+    /// </para>
+    /// </remarks>
+    private void DownloadAsset(ReleaseAsset? asset)
+    {
+        if (asset is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(asset.DownloadUri.AbsoluteUri)
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or PlatformNotSupportedException)
+        {
+            // 无默认浏览器等环境问题：忽略，不打断界面。
         }
     }
 }

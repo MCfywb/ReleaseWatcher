@@ -57,6 +57,9 @@
         -->
         <converters:AreEqualToVisibilityConverter x:Key="AreEqualToVisibilityConverter" />
 
+        <!-- 资产大小（字节 → "1.2 MB"）：下载资产列表逐文件展示用 -->
+        <converters:FileSizeConverter x:Key="FileSizeConverter" />
+
         <!--
             概览结果行的仓库图标：git 分支矢量图形。
             用 Path 数据而非字体字形 —— 分支图形在 MDL2/Fluent 中码位不稳，
@@ -83,6 +86,79 @@
                     <Setter Property="Background" Value="{DynamicResource Brush.Surface.Hover}" />
                 </Trigger>
             </Style.Triggers>
+        </Style>
+
+        <!--
+            检测列表三栏的列表（ListBox）：去默认边框与背景，由所在卡片承担。
+            用 ListBox 而非 ItemsControl + 按钮的原因：SelectedItem 双向绑定 +
+            容器级选中高亮 + 键盘上下键，选中态由容器样式统一保证
+            （"选中行持续保持视觉高亮"，2026-10-11 用户要求）。
+        -->
+        <Style x:Key="PaneList" TargetType="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        </Style>
+
+        <!--
+            列表行容器：hover 反白、选中用 Accent 淡底并保持常亮
+            （不随焦点丢失而消失），圆角与卡片内容对齐。
+        -->
+        <Style x:Key="PaneListItem" TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Root"
+                                Margin="4,2"
+                                Padding="10,8"
+                                Background="Transparent"
+                                CornerRadius="{StaticResource Radius.Button}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Brush.Surface.Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Brush.Accent.Soft}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+            三栏之间的拖拽分割条：平时只是一条细分隔线，悬停/聚焦时点亮为
+            Accent，提示"这里可以拖"。命中区域为整条 8px 列，比线本身宽，
+            便于抓取。拖拽结束保存比例（见 MainWindow.xaml.cs DragCompleted）。
+        -->
+        <Style x:Key="PaneSplitter" TargetType="GridSplitter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="ShowsPreview" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridSplitter">
+                        <Grid Background="Transparent">
+                            <Rectangle x:Name="Line"
+                                       Width="1"
+                                       HorizontalAlignment="Center"
+                                       Fill="{DynamicResource Brush.Border.Subtle}" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Line" Property="Fill" Value="{DynamicResource Brush.Accent}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Line" Property="Fill" Value="{DynamicResource Brush.Accent}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!--
@@ -917,8 +993,17 @@
                                          Margin="{StaticResource Space.Margin.Right.S}"
                                          Visibility="Collapsed"
                                          anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                <Button Content="立即检查"
-                                        Command="{Binding RefreshCommand}" />
+                                <Button Style="{StaticResource Button.Primary}"
+                                        Command="{Binding RefreshCommand}"
+                                        ToolTip="立即检测全部监控仓库">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource IconGlyph}"
+                                                   Margin="{StaticResource Space.Margin.Right.S}"
+                                                   FontSize="14"
+                                                   Text="&#xE72C;" />
+                                        <TextBlock Text="立即检查" />
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </Grid>
 
@@ -933,206 +1018,318 @@
                                        Text="点击「立即检查」开始检测。当前使用内置样例数据演示。" />
                         </StackPanel>
 
-                        <!-- 三栏 Split View -->
+                        <!--
+                            三栏 Split View：仓库列表 / Release 历史 / Release 详情。
+
+                            版式按 2026-10-11 用户要求重设计：
+                              · 三栏宽度可拖拽调整（GridSplitter），比例在拖拽结束后
+                                持久化到 config.json（见 LayoutPreferences）；
+                              · 各栏 MinWidth 保证仓库名等关键信息不被挤成缩略文字；
+                              · 左栏每行只有 仓库名 / 版本摘要 / 短状态，长说明在详情栏；
+                              · 中栏按发布时间从新到旧，选中行持续高亮（ListBox 容器样式）；
+                              · 右栏重组为 版本信息 / 发布说明 / 下载资产 三块。
+                        -->
                         <Grid x:Name="ReposSplit" Grid.Row="1"
                               anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding ListVisibility}">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition x:Name="MasterCol" Width="1.1*" />
-                                <ColumnDefinition Width="14" />
-                                <ColumnDefinition x:Name="HistoryCol" Width="1.4*" />
-                                <ColumnDefinition Width="14" />
-                                <ColumnDefinition x:Name="DetailCol" Width="1.5*" />
+                                <ColumnDefinition x:Name="MasterCol" Width="0.28*" MinWidth="220" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition x:Name="HistoryCol" Width="0.33*" MinWidth="180" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition x:Name="DetailCol" Width="0.39*" MinWidth="240" />
                             </Grid.ColumnDefinitions>
 
-                            <!-- 左：仓库列表（主项） -->
+                            <!-- 左：仓库列表。行 = 仓库名 + 版本摘要 + 短状态（长说明在详情栏） -->
                             <Border x:Name="MasterPane" Grid.Column="0"
                                     Background="{DynamicResource Brush.Surface}"
                                     BorderBrush="{DynamicResource Brush.Border.Subtle}"
-                                    BorderThickness="1" CornerRadius="8">
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource Radius.Card}"
+                                    ClipToBounds="True">
                                 <DockPanel LastChildFill="True">
-                                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.Caption}"
-                                               Margin="8,0,0,0"
-                                               Text="仓库" />
-                                    <ScrollViewer Padding="{StaticResource Space.Padding.Horizontal.S}"
-                                                  HorizontalScrollBarVisibility="Disabled">
-                                        <ItemsControl ItemsSource="{Binding Rows}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Button Margin="{StaticResource Space.Padding.Top.XS}"
-                                                            HorizontalContentAlignment="Stretch"
-                                                            Background="Transparent"
-                                                            BorderThickness="0"
-                                                            Command="{Binding DataContext.SelectRepositoryCommand, ElementName=ReposPage}"
-                                                            CommandParameter="{Binding}">
-                                                        <Grid>
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="*" />
-                                                                <ColumnDefinition Width="Auto" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                                <TextBlock Style="{StaticResource Text.Body}"
-                                                                           Text="{Binding RepositoryText}"
-                                                                           TextTrimming="CharacterEllipsis"
-                                                                           ToolTip="{Binding RepositoryText}" />
-                                                                <TextBlock Style="{StaticResource Text.Caption}"
-                                                                           Text="{Binding LatestVersionText}"
-                                                                           TextTrimming="CharacterEllipsis" />
-                                                            </StackPanel>
-                                                            <TextBlock Grid.Column="1"
-                                                                       Style="{StaticResource DetectionStatusText}"
-                                                                       Text="{Binding StatusText}"
-                                                                       Margin="8,0,0,0"
-                                                                       ToolTip="{Binding StatusText}" />
-                                                        </Grid>
-                                                    </Button>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </ScrollViewer>
+                                    <Grid DockPanel.Dock="Top" Margin="12,12,12,4">
+                                        <TextBlock Style="{StaticResource Text.CardTitle}" Text="仓库" />
+                                        <TextBlock HorizontalAlignment="Right"
+                                                   VerticalAlignment="Center"
+                                                   Style="{StaticResource Text.Secondary}"
+                                                   Text="{Binding Rows.Count}" />
+                                    </Grid>
+                                    <ListBox Style="{StaticResource PaneList}"
+                                             ItemContainerStyle="{StaticResource PaneListItem}"
+                                             ItemsSource="{Binding Rows}"
+                                             SelectedItem="{Binding SelectedRow}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel>
+                                                    <TextBlock Style="{StaticResource Text.Body}"
+                                                               Text="{Binding RepositoryText}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding RepositoryText}" />
+                                                    <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                                               Style="{StaticResource Text.Secondary}"
+                                                               Text="{Binding VersionSummaryText}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding VersionSummaryText}" />
+                                                    <TextBlock x:Name="RowStatus"
+                                                               Margin="{StaticResource Space.Padding.Top.XS}"
+                                                               Style="{StaticResource Text.Caption}"
+                                                               Text="{Binding BadgeText}" />
+                                                </StackPanel>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding HasUpdate}" Value="True">
+                                                        <Setter TargetName="RowStatus" Property="Foreground" Value="{DynamicResource Brush.Accent}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding HasError}" Value="True">
+                                                        <Setter TargetName="RowStatus" Property="Foreground" Value="{DynamicResource Brush.Error}" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
                                 </DockPanel>
                             </Border>
 
-                            <Rectangle x:Name="HistorySep" Grid.Column="1" Fill="{DynamicResource Brush.Border.Subtle}" />
-                            <Rectangle x:Name="DetailSep" Grid.Column="3" Fill="{DynamicResource Brush.Border.Subtle}" />
+                            <GridSplitter x:Name="HistorySplitter"
+                                          Grid.Column="1"
+                                          Style="{StaticResource PaneSplitter}" />
 
-                            <!-- 中：Release 历史 -->
+                            <!-- 中：Release 历史（发布时间从新到旧，选中行持续高亮） -->
                             <Border x:Name="HistoryPane" Grid.Column="2"
                                     Background="{DynamicResource Brush.Surface}"
                                     BorderBrush="{DynamicResource Brush.Border.Subtle}"
-                                    BorderThickness="1" CornerRadius="8">
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource Radius.Card}"
+                                    ClipToBounds="True">
                                 <DockPanel LastChildFill="True">
-                                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.Caption}"
-                                               Margin="8,0,0,0"
+                                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.CardTitle}"
+                                               Margin="12,12,12,4"
                                                Text="Release 历史" />
-                                    <!-- 无选中仓库：占位（与历史列表互斥淡入） -->
+                                    <!-- 空态：未选仓库 / 仓库没有 Release（与列表互斥淡入） -->
                                     <TextBlock DockPanel.Dock="Top"
                                                Style="{StaticResource PlaceholderBody}"
                                                HorizontalAlignment="Center"
                                                Margin="{StaticResource Space.Margin.M}"
-                                               Text="选择左侧仓库查看发布历史"
-                                               anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding SelectedRow, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}" />
-                                    <ScrollViewer Padding="{StaticResource Space.Padding.Horizontal.S}"
-                                                  HorizontalScrollBarVisibility="Disabled">
-                                        <ItemsControl ItemsSource="{Binding SelectedRow.Releases}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Button Margin="{StaticResource Space.Padding.Top.XS}"
-                                                            HorizontalContentAlignment="Stretch"
-                                                            Background="Transparent"
-                                                            BorderThickness="0"
-                                                            Command="{Binding DataContext.SelectReleaseCommand, ElementName=ReposPage}"
-                                                            CommandParameter="{Binding}">
-                                                        <Grid>
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="*" />
-                                                                <ColumnDefinition Width="Auto" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                                <TextBlock Style="{StaticResource Text.Body}"
-                                                                           Text="{Binding TagName}"
-                                                                           TextTrimming="CharacterEllipsis" />
-                                                                <TextBlock Style="{StaticResource Text.Caption}"
-                                                                           Text="{Binding PublishedAt, StringFormat={}{0:yyyy-MM-dd}}"
-                                                                           TextTrimming="CharacterEllipsis" />
-                                                            </StackPanel>
-                                                            <StackPanel Grid.Column="1"
-                                                                        Orientation="Horizontal"
-                                                                        HorizontalAlignment="Right"
-                                                                        VerticalAlignment="Center">
-                                                                <TextBlock Style="{StaticResource Text.Caption}"
-                                                                           Text="最新"
-                                                                           Foreground="{DynamicResource Brush.Accent}"
-                                                                           Margin="0,0,6,0">
-                                                                    <TextBlock.Visibility>
-                                                                        <MultiBinding Converter="{StaticResource AreEqualToVisibilityConverter}">
-                                                                            <Binding Path="TagName" />
-                                                                            <Binding Path="DataContext.SelectedRow.LatestRelease.TagName"
-                                                                                     ElementName="ReposPage" />
-                                                                        </MultiBinding>
-                                                                    </TextBlock.Visibility>
-                                                                </TextBlock>
-                                                                <TextBlock Style="{StaticResource Text.Caption}"
-                                                                           Text="草稿"
-                                                                           Visibility="{Binding IsDraft, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                                                <TextBlock Style="{StaticResource Text.Caption}"
-                                                                           Text="预发布"
-                                                                           Margin="6,0,0,0"
-                                                                           Visibility="{Binding IsPrerelease, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                                            </StackPanel>
-                                                        </Grid>
-                                                    </Button>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </ScrollViewer>
+                                               Text="{Binding HistoryEmptyText}"
+                                               anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding HistoryEmptyVisibility}" />
+                                    <ListBox Style="{StaticResource PaneList}"
+                                             ItemContainerStyle="{StaticResource PaneListItem}"
+                                             ItemsSource="{Binding SelectedRow.Releases}"
+                                             SelectedItem="{Binding SelectedRelease}"
+                                             anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding HistoryListVisibility}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto" />
+                                                        <RowDefinition Height="Auto" />
+                                                    </Grid.RowDefinitions>
+
+                                                    <Grid Grid.Row="0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Style="{StaticResource Text.Body}"
+                                                                   Text="{Binding TagName}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   ToolTip="{Binding TagName}" />
+                                                        <!-- "最新"轻量标签：仅最新合格项（两值相等 → 可见） -->
+                                                        <Border Grid.Column="1"
+                                                                Margin="8,0,0,0"
+                                                                Padding="8,2"
+                                                                Background="{DynamicResource Brush.Accent.Soft}"
+                                                                CornerRadius="{StaticResource Radius.Badge}">
+                                                            <TextBlock Style="{StaticResource Text.Caption}"
+                                                                       Foreground="{DynamicResource Brush.Accent}"
+                                                                       Text="最新">
+                                                                <TextBlock.Visibility>
+                                                                    <MultiBinding Converter="{StaticResource AreEqualToVisibilityConverter}">
+                                                                        <Binding Path="TagName" />
+                                                                        <Binding Path="DataContext.SelectedRow.LatestRelease.TagName"
+                                                                                 ElementName="ReposPage" />
+                                                                    </MultiBinding>
+                                                                </TextBlock.Visibility>
+                                                            </TextBlock>
+                                                        </Border>
+                                                    </Grid>
+
+                                                    <StackPanel Grid.Row="1"
+                                                                Margin="{StaticResource Space.Padding.Top.XS}"
+                                                                Orientation="Horizontal">
+                                                        <TextBlock x:Name="LatestDateLabel"
+                                                                   Style="{StaticResource Text.Secondary}"
+                                                                   Text="最新发布 · "
+                                                                   Visibility="Collapsed" />
+                                                        <TextBlock x:Name="NormalDateLabel"
+                                                                   Style="{StaticResource Text.Secondary}"
+                                                                   Text="发布于 " />
+                                                        <TextBlock Style="{StaticResource Text.Secondary}"
+                                                                   Text="{Binding PublishedAt, StringFormat={}{0:yyyy-MM-dd}}" />
+                                                        <TextBlock Margin="8,0,0,0"
+                                                                   Style="{StaticResource Text.Caption}"
+                                                                   Foreground="{DynamicResource Brush.Text.Secondary}"
+                                                                   Text="预发布"
+                                                                   Visibility="{Binding IsPrerelease, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                        <TextBlock Margin="8,0,0,0"
+                                                                   Style="{StaticResource Text.Caption}"
+                                                                   Foreground="{DynamicResource Brush.Text.Secondary}"
+                                                                   Text="草稿"
+                                                                   Visibility="{Binding IsDraft, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                                <DataTemplate.Triggers>
+                                                    <!-- 最新项的日期前缀改为"最新发布 ·" -->
+                                                    <DataTrigger Value="Visible">
+                                                        <DataTrigger.Binding>
+                                                            <MultiBinding Converter="{StaticResource AreEqualToVisibilityConverter}">
+                                                                <Binding Path="TagName" />
+                                                                <Binding Path="DataContext.SelectedRow.LatestRelease.TagName"
+                                                                         ElementName="ReposPage" />
+                                                            </MultiBinding>
+                                                        </DataTrigger.Binding>
+                                                        <Setter TargetName="LatestDateLabel" Property="Visibility" Value="Visible" />
+                                                        <Setter TargetName="NormalDateLabel" Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
                                 </DockPanel>
                             </Border>
 
-                            <!-- 右：Release 详情 -->
+                            <GridSplitter x:Name="DetailSplitter"
+                                          Grid.Column="3"
+                                          Style="{StaticResource PaneSplitter}" />
+
+                            <!-- 右：Release 详情 —— 版本信息 / 发布说明 / 下载资产 三个连续区块 -->
                             <Border x:Name="DetailPane" Grid.Column="4"
                                     Background="{DynamicResource Brush.Surface}"
                                     BorderBrush="{DynamicResource Brush.Border.Subtle}"
-                                    BorderThickness="1" CornerRadius="8">
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource Radius.Card}"
+                                    ClipToBounds="True">
                                 <DockPanel LastChildFill="True">
-                                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.Caption}"
-                                               Margin="8,0,0,0"
+                                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.CardTitle}"
+                                               Margin="12,12,12,4"
                                                Text="Release 详情" />
-                                    <!-- 无选中 Release：占位（与详情卡片互斥淡入） -->
+                                    <!-- 空态：未选仓库 / 仓库没有 Release（与详情内容互斥淡入） -->
                                     <TextBlock DockPanel.Dock="Top"
                                                Style="{StaticResource PlaceholderBody}"
                                                HorizontalAlignment="Center"
                                                Margin="{StaticResource Space.Margin.M}"
-                                               Text="选择左侧仓库与中间 Release 查看详情"
-                                               anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding SelectedRelease, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}" />
-                                    <ScrollViewer Padding="{StaticResource Space.Padding.Horizontal.S}"
-                                                  HorizontalScrollBarVisibility="Disabled">
-                                        <!-- 详情卡片：选中 Release 时淡入 -->
-                                        <StackPanel
-                                            anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding SelectedRelease, Converter={StaticResource NullToVisibilityConverter}}">
+                                               Text="{Binding DetailEmptyText}"
+                                               anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding DetailEmptyVisibility}" />
+
+                                    <ScrollViewer Padding="12,4,12,16"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  VerticalScrollBarVisibility="Auto"
+                                                  anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding DetailContentVisibility}">
+                                        <StackPanel>
+                                            <!-- ===== 区块一：版本信息 ===== -->
                                             <TextBlock Style="{StaticResource Text.PageTitle}"
-                                                       Text="{Binding SelectedRelease.TagName}" />
-                                            <TextBlock Style="{StaticResource Text.Caption}"
-                                                       Text="{Binding SelectedRelease.Repository}" />
-                                            <StackPanel Orientation="Horizontal" Margin="{StaticResource Space.Padding.Top.S}">
-                                                <TextBlock Style="{StaticResource Text.Caption}" Text="通道：" />
-                                                <TextBlock Style="{StaticResource DetailChannelText}" />
+                                                       Text="{Binding SelectedRelease.Title}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding SelectedRelease.Title}" />
+                                            <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                                       Style="{StaticResource Text.Secondary}"
+                                                       Text="{Binding SelectedRow.RepositoryText}" />
+                                            <StackPanel Margin="{StaticResource Space.Padding.Top.S}"
+                                                        Orientation="Horizontal">
+                                                <!-- 通道徽章：草稿 / 预发布 / 正式版（文字取自 VM） -->
+                                                <Border Padding="8,3"
+                                                        Background="{DynamicResource Brush.Surface.Selected}"
+                                                        CornerRadius="{StaticResource Radius.Badge}">
+                                                    <TextBlock Style="{StaticResource Text.Caption}"
+                                                               Foreground="{DynamicResource Brush.Text.Secondary}"
+                                                               Text="{Binding DetailChannelText}" />
+                                                </Border>
+                                                <Border Margin="{StaticResource Space.Margin.Right.S}"
+                                                        Padding="8,3"
+                                                        Background="{DynamicResource Brush.Accent.Soft}"
+                                                        CornerRadius="{StaticResource Radius.Badge}"
+                                                        anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding DetailUpdatePillVisibility}">
+                                                    <TextBlock Style="{StaticResource Text.Caption}"
+                                                               Foreground="{DynamicResource Brush.Accent}"
+                                                               Text="有新版本" />
+                                                </Border>
                                             </StackPanel>
-                                            <TextBlock Style="{StaticResource Text.Caption}"
-                                                       Margin="{StaticResource Space.Padding.Top.XS}"
+                                            <TextBlock Margin="{StaticResource Space.Padding.Top.S}"
+                                                       Style="{StaticResource Text.Secondary}"
                                                        Text="{Binding SelectedRelease.PublishedAt, StringFormat=发布于 {0:yyyy-MM-dd HH:mm}}" />
-                                            <TextBlock Style="{StaticResource Text.Caption}"
-                                                       Text="发布说明"
-                                                       Margin="{StaticResource Space.Padding.Top.M}" />
-                                            <TextBlock Style="{StaticResource Text.Body}"
-                                                       TextWrapping="Wrap"
-                                                       Text="{Binding SelectedRelease.Notes}" />
-                                            <TextBlock Style="{StaticResource Text.Caption}"
-                                                       Text="资产"
-                                                       Margin="{StaticResource Space.Padding.Top.M}" />
-                                            <ItemsControl ItemsSource="{Binding SelectedRelease.Assets}">
+
+                                            <Border Height="1"
+                                                    Margin="{StaticResource Space.Padding.Top.M}"
+                                                    Background="{DynamicResource Brush.Border.Subtle}" />
+
+                                            <!-- ===== 区块二：发布说明（面板内滚动） ===== -->
+                                            <TextBlock Style="{StaticResource Text.CardTitle}"
+                                                       Text="发布说明" />
+                                            <TextBlock Margin="{StaticResource Space.Padding.Top.S}"
+                                                       Style="{StaticResource Text.Body}"
+                                                       Text="{Binding DetailNotes}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="{StaticResource Space.Padding.Top.S}"
+                                                       Visibility="{Binding SelectedRelease.HtmlUrl, Converter={StaticResource NullToVisibilityConverter}}">
+                                                <Hyperlink NavigateUri="{Binding SelectedRelease.HtmlUrl}"
+                                                           RequestNavigate="ReleaseLink_RequestNavigate"
+                                                           Foreground="{DynamicResource Brush.Accent}"
+                                                           TextDecorations="{x:Null}">
+                                                    查看完整 Release →
+                                                </Hyperlink>
+                                            </TextBlock>
+
+                                            <Border Height="1"
+                                                    Margin="{StaticResource Space.Padding.Top.M}"
+                                                    Background="{DynamicResource Brush.Border.Subtle}" />
+
+                                            <!-- ===== 区块三：下载资产（逐文件带下载按钮） ===== -->
+                                            <TextBlock Style="{StaticResource Text.CardTitle}"
+                                                       Text="下载资产" />
+                                            <!-- 没有可下载文件时给空态说明，不放禁用大按钮 -->
+                                            <TextBlock Margin="{StaticResource Space.Padding.Top.S}"
+                                                       Style="{StaticResource Text.Secondary}"
+                                                       Text="此 Release 没有可下载资产。"
+                                                       anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding AssetEmptyVisibility}" />
+                                            <ItemsControl Margin="{StaticResource Space.Padding.Top.S}"
+                                                          ItemsSource="{Binding SelectedRelease.Assets}"
+                                                          anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding AssetListVisibility}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
-                                                        <Grid Margin="{StaticResource Space.Padding.Top.XS}">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="*" />
-                                                                <ColumnDefinition Width="Auto" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <TextBlock Style="{StaticResource Text.Body}"
-                                                                       Text="{Binding Name}"
-                                                                       TextTrimming="CharacterEllipsis"
-                                                                       ToolTip="{Binding Name}" />
-                                                            <TextBlock Grid.Column="1"
-                                                                       Style="{StaticResource Text.Caption}"
-                                                                       Text="{Binding SizeInBytes, StringFormat={}{0:N0} B}"
-                                                                       Margin="8,0,0,0" />
-                                                        </Grid>
+                                                        <Border Margin="{StaticResource Space.Padding.Top.XS}"
+                                                                Padding="10,8"
+                                                                Background="{DynamicResource Brush.Background.Secondary}"
+                                                                BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="{StaticResource Radius.Button}">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <StackPanel VerticalAlignment="Center">
+                                                                    <TextBlock Style="{StaticResource Text.Body}"
+                                                                               Text="{Binding Name}"
+                                                                               TextTrimming="CharacterEllipsis"
+                                                                               ToolTip="{Binding Name}" />
+                                                                    <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                                                               Style="{StaticResource Text.Caption}"
+                                                                               Text="{Binding SizeInBytes, Converter={StaticResource FileSizeConverter}}" />
+                                                                </StackPanel>
+                                                                <Button Grid.Column="1"
+                                                                        VerticalAlignment="Center"
+                                                                        Margin="12,0,0,0"
+                                                                        Padding="12,4"
+                                                                        Style="{StaticResource Button.Base}"
+                                                                        Command="{Binding DataContext.DownloadAssetCommand, ElementName=ReposPage}"
+                                                                        CommandParameter="{Binding}"
+                                                                        ToolTip="通过系统默认浏览器下载该文件">
+                                                                    下载
+                                                                </Button>
+                                                            </Grid>
+                                                        </Border>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
-                                            <Button Content="下载"
-                                                    Margin="{StaticResource Space.Padding.Top.M}"
-                                                    IsEnabled="False"
-                                                    ToolTip="aria2 接入后启用" />
                                         </StackPanel>
                                     </ScrollViewer>
                                 </DockPanel>
