@@ -2,6 +2,9 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
 
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+
 using ReleaseWatcher.Application.Abstractions;
 using ReleaseWatcher.Application.Services;
 using ReleaseWatcher.Domain.ValueObjects;
@@ -25,19 +28,25 @@ namespace ReleaseWatcher.App.ViewModels;
 /// 颜色由界面按 <see cref="HasUpdate"/> 与 <see cref="HasError"/>
 /// 自行取语义画刷—— ViewModel 不引用任何画刷，保持与主题无关。
 /// </para>
+/// <para>
+/// <b>为何不需要 INotifyPropertyChanged：</b>本对象是<b>不可变</b>的——
+/// 所有展示字段仅在构造函数中赋值一次，之后整行被替换
+/// （<see cref="RepositoryListViewModel.Rows"/> 每次刷新整体重建），
+/// 不存在"构造后就地修改某字段"的需求。因此不继承任何
+/// Observable 基类、不套用 <c>[ObservableProperty]</c>，
+/// 避免生成一组永远不会被触发的通知，也避免暴露不该存在的
+/// 可变 setter。这与"用 CommunityToolkit.Mvvm 替代手写基类"的目标一致：
+/// 需要通知时才用工具，不需要时连基类都不引入。
+/// </para>
 /// </remarks>
-public sealed class RepositoryRowViewModel : ObservableObject
+public sealed class RepositoryRowViewModel
 {
-    private string _statusText = string.Empty;
-    private bool _hasUpdate;
-    private bool _hasError;
-
     /// <summary>构造显示模型（正常检测结果）。</summary>
     /// <param name="result">检测结果。</param>
     public RepositoryRowViewModel(RepositoryCheckResult result)
     {
         // 刻意不写 ArgumentNullException.ThrowIfNull —— 参数是不可空值类型，
-        // 调用该检查会触发 CA2264（对不可空值做空检查是��操作）。
+        // 调用该检查会触发 CA2264（对不可空值做空检查是冗余操作）。
         Repository = result.Repository;
 
         // 判定结论与"有更新"一并取自领域层，不在此处重新推断语义 ——
@@ -72,13 +81,10 @@ public sealed class RepositoryRowViewModel : ObservableObject
     {
         Repository = repository;
 
-        // 直接赋后备字段而非走属性：私有构造里属性是 init-only，
-        // 且赋字段能让编译器确知"退出构造函数时已赋值"（避免 CS8618）。
-        _statusText = errorText;
-        _hasError = true;
-
         // 失败行的其余列给明确的占位符而非空串：
         // 空白单元格会被误读为"该字段为空"，而非"没取到数据"。
+        StatusText = errorText;
+        HasError = true;
         LatestVersionText = "—";
         KnownVersionText = "—";
         TagText = "—";
@@ -116,18 +122,10 @@ public sealed class RepositoryRowViewModel : ObservableObject
     public string RepositoryText => Repository.ToString();
 
     /// <summary>检测结论的文字说明（面向用户，非内部术语）。</summary>
-    public string StatusText
-    {
-        get => _statusText;
-        private set => SetProperty(ref _statusText, value);
-    }
+    public string StatusText { get; }
 
     /// <summary>是否有可更新的新版本；界面据此决定状态色。</summary>
-    public bool HasUpdate
-    {
-        get => _hasUpdate;
-        private set => SetProperty(ref _hasUpdate, value);
-    }
+    public bool HasUpdate { get; }
 
     /// <summary>
     /// 该行是否为检测失败；界面据此显示错误色。
@@ -137,11 +135,7 @@ public sealed class RepositoryRowViewModel : ObservableObject
     /// 二者在界面上必须能被一眼区分 ——
     /// 前者是用户的网络问题，后者是仓库的客观状态。
     /// </remarks>
-    public bool HasError
-    {
-        get => _hasError;
-        private set => SetProperty(ref _hasError, value);
-    }
+    public bool HasError { get; }
 
     /// <summary>最新合格版本号文本，无则显示占位符。</summary>
     public string LatestVersionText { get; }
@@ -166,7 +160,7 @@ public sealed class RepositoryRowViewModel : ObservableObject
 
     /// <summary>把字节数格式化为易读文本。</summary>
     /// <remarks>
-    /// 用invariant 的数字格式再补单位，避免不同区域设置下
+    /// 用 invariant 的数字格式再补单位，避免不同区域设置下
     /// 小数点与千分位差异导致列宽跳动。
     /// </remarks>
     private static string FormatSize(long bytes)
@@ -203,13 +197,26 @@ public sealed class RepositoryRowViewModel : ObservableObject
 /// 本类只做编排与展示转换。
 /// </para>
 /// <para>
+/// <b>通知实现：</b>原手写 <c>ObservableObject</c> 基类已替换为
+/// CommunityToolkit.Mvvm 的 <see cref="ObservableObject"/>（运行时基类），
+/// 复用其 <see cref="ObservableObject.SetProperty{T}"/> 与
+/// <see cref="ObservableObject.OnPropertyChanged"/>。刷新命令改用工具包内置的
+/// <see cref="AsyncRelayCommand"/>，替代手写的同步 <c>RelayCommand</c>。
+/// </para>
+/// <para>
+/// <b>为何此处不用源生成器 [ObservableProperty]：</b>
+/// WPF 的标记编译临时工程（<c>*_wpftmp</c>）会重复编译源生成器产物，
+/// 导致 <c>CS0102</c> "字段已定义"。运行时基类 + 手写属性可规避该问题，
+/// 同时仍删除手写基类、全面接入工具包。详见 AGENTS.md 的第三方库决策记录。
+/// </para>
+/// <para>
 /// <b>异常处理：</b>单个仓库检测失败<b>不让整页失败</b>。
 /// 网络故障下往往多个仓库同时不可达，若首个失败就中断，
 /// 用户会看到空白页而不知原因。故逐仓库捕获异常，
 /// 失败者以错误行呈现，其余照常显示。
 /// </para>
 /// </remarks>
-public sealed class RepositoryListViewModel : ObservableObject
+public sealed partial class RepositoryListViewModel : ObservableObject
 {
     private readonly ReleaseDetectionService _detectionService;
     private readonly Func<IReadOnlyList<RepositoryRef>> _repositoryProvider;
@@ -236,14 +243,16 @@ public sealed class RepositoryListViewModel : ObservableObject
         _repositoryProvider = repositoryProvider;
         _knownVersionProvider = knownVersionProvider;
 
-        RefreshCommand = new RelayCommand(() => _ = RefreshAsync());
+        // 工具包内置的 AsyncRelayCommand：异步方法包装为 ICommand，
+        // 命令名与迁移前一致（RefreshCommand），XAML 绑定无需改动。
+        RefreshCommand = new AsyncRelayCommand(Refresh);
     }
 
     /// <summary>检测结果行集合，绑到 <c>ItemsControl.ItemsSource</c>。</summary>
     public ObservableCollection<RepositoryRowViewModel> Rows { get; } = [];
 
-    /// <summary>"立即检查"命令。</summary>
-    public RelayCommand RefreshCommand { get; }
+    /// <summary>"立即检查"命令（<see cref="AsyncRelayCommand"/> 包装 <see cref="Refresh"/>）。</summary>
+    public AsyncRelayCommand RefreshCommand { get; }
 
     /// <summary>是否正在检测；用于禁用按钮与显示加载提示。</summary>
     public bool IsBusy
@@ -253,7 +262,7 @@ public sealed class RepositoryListViewModel : ObservableObject
         {
             if (SetProperty(ref _isBusy, value))
             {
-                RefreshCommand.RaiseCanExecuteChanged();
+                RefreshCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -294,12 +303,18 @@ public sealed class RepositoryListViewModel : ObservableObject
     /// 执行一轮检测，刷新 <see cref="Rows"/>。
     /// </summary>
     /// <remarks>
-    /// 以 <c>async void</c> 触发：入口是 <c>RelayCommand</c>（同步契约），
-    /// 而真实检测必然是异步的。此处自行负责异常捕获与状态复位，
-    /// 不让异常逃逸到 UI 线程的未处理异常处理器 ——
-    /// 那会让整个应用崩溃，而这里失败只应影响列表显示。
+    /// <para>
+    /// 入口是 <see cref="RefreshCommand"/>（<c>AsyncRelayCommand</c>）驱动的
+    /// 异步方法。真实检测必然是异步的，此处自行负责异常捕获与状态复位，
+    /// 不让异常逃逸到 UI 线程的未处理异常处理器 —— 那会让整个应用崩溃，
+    /// 而这里失败只应影响列表显示。
+    /// </para>
+    /// <para>
+    /// <b>防并发：</b>以 <see cref="IsBusy"/> 短路后续点击，避免
+    /// 并发刷新打乱行顺序，让"检测结果"难以对应到具体仓库。
+    /// </para>
     /// </remarks>
-    public async Task RefreshAsync()
+    public async Task Refresh()
     {
         if (IsBusy)
         {

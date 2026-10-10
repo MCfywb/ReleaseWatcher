@@ -1,6 +1,9 @@
 using System.Globalization;
 using System.Windows;
 
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+
 using ReleaseWatcher.Application.Abstractions;
 using ReleaseWatcher.Application.Services;
 using ReleaseWatcher.Domain.ValueObjects;
@@ -23,8 +26,17 @@ namespace ReleaseWatcher.App.ViewModels;
 /// 直接复用其已完成的检测结果，不重复取数——
 /// 概览单独再取一次会让两个页面在数据不一致时无法解释。
 /// </para>
+/// <para>
+/// <b>通知实现：</b>原手写 <c>ObservableObject</c> 基类已替换为
+/// CommunityToolkit.Mvvm 的 <see cref="ObservableObject"/>（运行时基类），
+/// 复用其 <see cref="ObservableObject.SetProperty{T}"/> 与
+/// <see cref="ObservableObject.OnPropertyChanged"/>；刷新命令改用内置的
+/// <see cref="AsyncRelayCommand"/>。WPF 标记编译临时工程对源生成器产物存在
+/// 重复编译问题，故此处采用运行时基类 + 手写属性的稳妥方案，
+/// 同时仍删除手写基类、全面接入工具包（详见 AGENTS.md）。
+/// </para>
 /// </remarks>
-public sealed class OverviewViewModel : ObservableObject
+public sealed partial class OverviewViewModel : ObservableObject
 {
     private readonly RepositoryListViewModel _repositoryList;
 
@@ -44,7 +56,6 @@ public sealed class OverviewViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(repositoryList);
 
         _repositoryList = repositoryList;
-        RefreshCommand = new RelayCommand(() => _ = RefreshAsync());
 
         // 检测列表变化时概览要跟着变 —— 否则会出现
         // "列表已刷新、概览数字还是旧的"。
@@ -52,6 +63,9 @@ public sealed class OverviewViewModel : ObservableObject
 
         // Rows 是 ObservableCollection，集合变动需单独订阅。
         _repositoryList.Rows.CollectionChanged += OnRowsChanged;
+
+        // 工具包内置的 AsyncRelayCommand 包装 Refresh()。
+        RefreshCommand = new AsyncRelayCommand(Refresh);
     }
 
     /// <summary>解除对检测列表的订阅。</summary>
@@ -65,12 +79,12 @@ public sealed class OverviewViewModel : ObservableObject
         _repositoryList.Rows.CollectionChanged -= OnRowsChanged;
     }
 
-    /// <summary>"刷新"命令，与检测列表页共用同一数据源。</summary>
-    public RelayCommand RefreshCommand { get; }
+    /// <summary>"刷新"命令（<see cref="AsyncRelayCommand"/> 包装 <see cref="Refresh"/>）。</summary>
+    public AsyncRelayCommand RefreshCommand { get; }
 
     /// <summary>底层检测列表，供检测列表页绑定。</summary>
     /// <remarks>
-    /// <b>为何把DataContext 设在概览上、列表页再下钻取本属性：</b>
+    /// <b>为何把 DataContext 设在概览上、列表页再下钻取本属性：</b>
     /// 概览与列表必须读到<b>同一份</b>检测结果。若两个页面各自
     /// 设 DataContext，就会得到两个独立实例，计数与列表内容
     /// 可能对不上。故统一挂在概览上，列表页用
@@ -86,7 +100,7 @@ public sealed class OverviewViewModel : ObservableObject
         {
             if (SetProperty(ref _isBusy, value))
             {
-                RefreshCommand.RaiseCanExecuteChanged();
+                RefreshCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -164,13 +178,13 @@ public sealed class OverviewViewModel : ObservableObject
     private const int RecentRowLimit = 5;
 
     /// <summary>执行一轮检测并刷新统计。</summary>
-    public async Task RefreshAsync()
+    public async Task Refresh()
     {
         IsBusy = true;
 
         try
         {
-            await _repositoryList.RefreshAsync();
+            await _repositoryList.Refresh();
 
             // 统计口径：总数 = 全部行；
             // 更新数由领域层判定结果给出，不在此处按版本号大小自行比较。

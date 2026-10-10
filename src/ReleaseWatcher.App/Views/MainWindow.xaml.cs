@@ -109,7 +109,7 @@ public partial class MainWindow : Window
         // 而不是让用户先点一次"刷新"才知道有没有数据。
         // 用 Load 事件而非构造函数直接调用：构造函数此刻窗口尚未显示，
         // 启动一轮异步检测会让界面先闪一下空态再跳到有数据。
-        Loaded += async (_, _) => await _overviewViewModel.RefreshAsync();
+        Loaded += async (_, _) => await _overviewViewModel.Refresh();
     }
 
     // ==================== 标题栏 ====================
