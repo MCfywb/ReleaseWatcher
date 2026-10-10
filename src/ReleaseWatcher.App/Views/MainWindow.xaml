@@ -132,9 +132,9 @@
         </Style>
 
         <!--
-            三栏之间的拖拽分割条：平时只是一条细分隔线，悬停/聚焦时点亮为
-            Accent，提示"这里可以拖"。命中区域为整条 8px 列，比线本身宽，
-            便于抓取。拖拽结束保存比例（见 MainWindow.xaml.cs DragCompleted）。
+            三栏之间的拖拽分割条：平时完全不画线（三栏各自有卡片描边承担分隔），
+            鼠标移上去才点亮为 Accent，提示"这里可以拖"。
+            命中区域为整条 8px 间距列，线画在正中且比间距细，便于抓取。
         -->
         <Style x:Key="PaneSplitter" TargetType="GridSplitter">
             <Setter Property="Background" Value="Transparent" />
@@ -154,9 +154,10 @@
                             <Rectangle x:Name="Line"
                                        Width="1"
                                        HorizontalAlignment="Center"
-                                       Fill="{DynamicResource Brush.Border.Subtle}" />
+                                       Fill="Transparent" />
                         </Grid>
                         <ControlTemplate.Triggers>
+                            <!-- 仅在指针悬停 / 键盘聚焦时显现 -->
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Line" Property="Fill" Value="{DynamicResource Brush.Accent}" />
                             </Trigger>
@@ -167,6 +168,43 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!--
+            右栏"发布通道"胶囊：正式版绿、预发布橙、草稿中性。
+            与左栏/历史栏同一套语义配色。右栏内容不在 DataTemplate 内，
+            无法用 DataTemplate.Triggers，故做成显式键样式 ——
+            隐式样式会被 WindowXaml_MustNotDuplicateImplicitStyleKeys 守卫拦截。
+        -->
+        <Style x:Key="DetailChannelPill" TargetType="Border">
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Success}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource Radius.Badge}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding DetailIsPrerelease}" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning}" />
+                </DataTrigger>
+                <!-- 草稿放最后：判定优先级与 DetailChannelText 一致，草稿优先于预发布 -->
+                <DataTrigger Binding="{Binding DetailIsDraft}" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+                    <Setter Property="Background" Value="{DynamicResource Brush.Surface.Selected}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DetailChannelPillText" TargetType="TextBlock"
+               BasedOn="{StaticResource Text.Caption}">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Success}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding DetailIsPrerelease}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding DetailIsDraft}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
 
         <!--
@@ -1043,7 +1081,13 @@
                               · 中栏按发布时间从新到旧，选中行持续高亮（ListBox 容器样式）；
                               · 右栏重组为 版本信息 / 发布说明 / 下载资产 三块。
                         -->
+                        <!--
+                            三栏整体左右各留 16px，与窗口边框保持距离 ——
+                            三栏总宽度 = 内容区宽 − 32，两侧留白固定；
+                            ActualWidth 不含边距，故列宽计算无需改动。
+                        -->
                         <Grid x:Name="ReposSplit" Grid.Row="1"
+                              Margin="16,0,16,0"
                               anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding ListVisibility}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition x:Name="MasterCol" Width="0.28*" MinWidth="220" />
@@ -1074,27 +1118,60 @@
                                              SelectedItem="{Binding SelectedRow}">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
-                                                <StackPanel>
-                                                    <TextBlock Style="{StaticResource Text.Body}"
-                                                               Text="{Binding RepositoryText}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip="{Binding RepositoryText}" />
-                                                    <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
-                                                               Style="{StaticResource Text.Secondary}"
-                                                               Text="{Binding VersionSummaryText}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               ToolTip="{Binding VersionSummaryText}" />
-                                                    <TextBlock x:Name="RowStatus"
-                                                               Margin="{StaticResource Space.Padding.Top.XS}"
-                                                               Style="{StaticResource Text.Caption}"
-                                                               Text="{Binding BadgeText}" />
-                                                </StackPanel>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Style="{StaticResource Text.Body}"
+                                                                   Text="{Binding RepositoryText}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   ToolTip="{Binding RepositoryText}" />
+                                                        <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                                                   Style="{StaticResource Text.Secondary}"
+                                                                   Text="{Binding VersionSummaryText}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   ToolTip="{Binding VersionSummaryText}" />
+                                                    </StackPanel>
+
+                                                    <!--
+                                                        状态胶囊：与历史栏的正式版/预发布同款描边胶囊，
+                                                        置于行的右上角（不再占第三行，避免文字互相挤压）。
+                                                    -->
+                                                    <Border Grid.Column="1"
+                                                            x:Name="StatusPill"
+                                                            Margin="8,0,0,0"
+                                                            Padding="6,2"
+                                                            VerticalAlignment="Top"
+                                                            Background="Transparent"
+                                                            BorderBrush="{DynamicResource Brush.Success}"
+                                                            BorderThickness="1"
+                                                            CornerRadius="{StaticResource Radius.Badge}">
+                                                        <TextBlock x:Name="RowStatus"
+                                                                   Style="{StaticResource Text.Caption}"
+                                                                   Foreground="{DynamicResource Brush.Success}"
+                                                                   Text="{Binding BadgeText}" />
+                                                    </Border>
+                                                </Grid>
                                                 <DataTemplate.Triggers>
+                                                    <!-- 有新版本：蓝（描边 + 淡底，与历史栏"最新"的纯淡底区分） -->
                                                     <DataTrigger Binding="{Binding HasUpdate}" Value="True">
+                                                        <Setter TargetName="StatusPill" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                                                        <Setter TargetName="StatusPill" Property="Background" Value="{DynamicResource Brush.Accent.Soft}" />
                                                         <Setter TargetName="RowStatus" Property="Foreground" Value="{DynamicResource Brush.Accent}" />
                                                     </DataTrigger>
+                                                    <!-- 检测失败：红 -->
                                                     <DataTrigger Binding="{Binding HasError}" Value="True">
+                                                        <Setter TargetName="StatusPill" Property="BorderBrush" Value="{DynamicResource Brush.Error}" />
+                                                        <Setter TargetName="StatusPill" Property="Background" Value="{DynamicResource Brush.Error.Soft}" />
                                                         <Setter TargetName="RowStatus" Property="Foreground" Value="{DynamicResource Brush.Error}" />
+                                                    </DataTrigger>
+                                                    <!-- 无内容类（暂无 Release / 仅预发布 / 版本无法解析）：中性 -->
+                                                    <DataTrigger Binding="{Binding IsNoRelease}" Value="True">
+                                                        <Setter TargetName="StatusPill" Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+                                                        <Setter TargetName="StatusPill" Property="Background" Value="{DynamicResource Brush.Surface.Selected}" />
+                                                        <Setter TargetName="RowStatus" Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
                                                     </DataTrigger>
                                                 </DataTemplate.Triggers>
                                             </DataTemplate>
@@ -1258,17 +1335,20 @@
                                                        Text="{Binding SelectedRow.RepositoryText}" />
                                             <StackPanel Margin="{StaticResource Space.Padding.Top.S}"
                                                         Orientation="Horizontal">
-                                                <!-- 通道徽章：草稿 / 预发布 / 正式版（文字取自 VM） -->
-                                                <Border Padding="8,3"
-                                                        Background="{DynamicResource Brush.Surface.Selected}"
-                                                        CornerRadius="{StaticResource Radius.Badge}">
-                                                    <TextBlock Style="{StaticResource Text.Caption}"
-                                                               Foreground="{DynamicResource Brush.Text.Secondary}"
+                                                <!-- 通道胶囊：正式版绿 / 预发布橙 / 草稿中性（着色见 DetailChannelPill 样式） -->
+                                                <Border Style="{StaticResource DetailChannelPill}">
+                                                    <TextBlock Style="{StaticResource DetailChannelPillText}"
                                                                Text="{Binding DetailChannelText}" />
                                                 </Border>
+                                                <!--
+                                                    有新版本：强调胶囊 —— 描边 + 淡底，
+                                                    与历史栏"最新"（纯淡底）区分开。
+                                                -->
                                                 <Border Margin="{StaticResource Space.Margin.Right.S}"
                                                         Padding="8,3"
                                                         Background="{DynamicResource Brush.Accent.Soft}"
+                                                        BorderBrush="{DynamicResource Brush.Accent}"
+                                                        BorderThickness="1"
                                                         CornerRadius="{StaticResource Radius.Badge}"
                                                         anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding DetailUpdatePillVisibility}">
                                                     <TextBlock Style="{StaticResource Text.Caption}"

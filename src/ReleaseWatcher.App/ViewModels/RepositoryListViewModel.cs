@@ -538,6 +538,18 @@ public sealed partial class RepositoryListViewModel : ObservableObject
                 ? "预发布"
                 : "正式版";
 
+    /// <summary>所选 Release 是否为预发布（右栏通道胶囊着橙色用）。</summary>
+    public bool DetailIsPrerelease => SelectedRelease?.IsPrerelease ?? false;
+
+    /// <summary>
+    /// 所选 Release 是否为草稿（右栏通道胶囊着中性色用）。
+    /// </summary>
+    /// <remarks>
+    /// 判定时优先级与 <see cref="DetailChannelText"/> 一致：
+    /// 草稿优先于预发布，两者同时成立时按草稿呈现。
+    /// </remarks>
+    public bool DetailIsDraft => SelectedRelease?.IsDraft ?? false;
+
     /// <summary>
     /// "有新版本"徽章的可见性：仅当所选 Release 就是该仓库的最新合格项、
     /// 且该仓库确实有更新时显示。
@@ -607,6 +619,8 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         OnPropertyChanged(nameof(AssetListVisibility));
         OnPropertyChanged(nameof(AssetEmptyVisibility));
         OnPropertyChanged(nameof(DetailChannelText));
+        OnPropertyChanged(nameof(DetailIsPrerelease));
+        OnPropertyChanged(nameof(DetailIsDraft));
         OnPropertyChanged(nameof(DetailUpdatePillVisibility));
         OnPropertyChanged(nameof(DetailNotes));
     }
