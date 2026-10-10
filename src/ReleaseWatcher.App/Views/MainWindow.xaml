@@ -139,6 +139,14 @@
         <Style x:Key="PaneSplitter" TargetType="GridSplitter">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="ShowsPreview" Value="False" />
+            <!--
+                铺满整条 8px 间距列（线画在正中），并且只改相邻两栏：
+                PreviousAndNext 是"拖这条线，左右两栏此消彼长"的语义，
+                配合像素列宽可避免第三栏跟着反方向移动。
+            -->
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="ResizeBehavior" Value="PreviousAndNext" />
+            <Setter Property="ResizeDirection" Value="Columns" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="GridSplitter">
@@ -901,8 +909,8 @@
                                                                     VerticalAlignment="Center">
                                                             <!--
                                                                 徽章默认"已是最新"（绿）。HasUpdate / HasError /
-                                                                IsBaseline 三个状态互斥（见领域规则），由
-                                                                Triggers 换色；文字统一取自 BadgeText。
+                                                                IsNoRelease 分别着色（见领域规则），
+                                                                文字统一取自 BadgeText。
                                                             -->
                                                             <Border x:Name="Badge"
                                                                     Margin="0,0,8,0"
@@ -930,7 +938,13 @@
                                                         <Setter TargetName="Badge" Property="Background" Value="{DynamicResource Brush.Error.Soft}" />
                                                         <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource Brush.Error}" />
                                                     </DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsBaseline}" Value="True">
+                                                    <!--
+                                                        "没有可展示内容"类（暂无 Release / 仅预发布 / 版本无法解析）
+                                                        取中性色，不用绿色 —— 绿会把它读成"一切正常"。
+                                                        2026-10-11：原"基准版本"状态已删除（与"已是最新"同义），
+                                                        其触发随之移除。
+                                                    -->
+                                                    <DataTrigger Binding="{Binding IsNoRelease}" Value="True">
                                                         <Setter TargetName="Badge" Property="Background" Value="{DynamicResource Brush.Surface.Selected}" />
                                                         <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
                                                     </DataTrigger>
@@ -1124,6 +1138,7 @@
                                                         <RowDefinition Height="Auto" />
                                                     </Grid.RowDefinitions>
 
+                                                    <!-- 第一行：版本号 + 标记（紧跟版本号，样式同右栏通道胶囊） -->
                                                     <Grid Grid.Row="0">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*" />
@@ -1133,62 +1148,70 @@
                                                                    Text="{Binding TagName}"
                                                                    TextTrimming="CharacterEllipsis"
                                                                    ToolTip="{Binding TagName}" />
-                                                        <!-- "最新"轻量标签：仅最新合格项（两值相等 → 可见） -->
-                                                        <Border Grid.Column="1"
-                                                                Margin="8,0,0,0"
-                                                                Padding="8,2"
-                                                                Background="{DynamicResource Brush.Accent.Soft}"
-                                                                CornerRadius="{StaticResource Radius.Badge}">
-                                                            <TextBlock Style="{StaticResource Text.Caption}"
-                                                                       Foreground="{DynamicResource Brush.Accent}"
-                                                                       Text="最新">
-                                                                <TextBlock.Visibility>
-                                                                    <MultiBinding Converter="{StaticResource AreEqualToVisibilityConverter}">
-                                                                        <Binding Path="TagName" />
-                                                                        <Binding Path="DataContext.SelectedRow.LatestRelease.TagName"
-                                                                                 ElementName="ReposPage" />
-                                                                    </MultiBinding>
-                                                                </TextBlock.Visibility>
-                                                            </TextBlock>
-                                                        </Border>
+
+                                                        <StackPanel Grid.Column="1"
+                                                                    Orientation="Horizontal"
+                                                                    VerticalAlignment="Center">
+                                                            <!-- "最新"轻量标签：仅最新合格项 -->
+                                                            <Border Margin="8,0,0,0"
+                                                                    Padding="6,2"
+                                                                    Background="{DynamicResource Brush.Accent.Soft}"
+                                                                    CornerRadius="{StaticResource Radius.Badge}">
+                                                                <TextBlock Style="{StaticResource Text.Caption}"
+                                                                           Foreground="{DynamicResource Brush.Accent}"
+                                                                           Text="最新">
+                                                                    <TextBlock.Visibility>
+                                                                        <MultiBinding Converter="{StaticResource AreEqualToVisibilityConverter}">
+                                                                            <Binding Path="TagName" />
+                                                                            <Binding Path="DataContext.SelectedRow.LatestRelease.TagName"
+                                                                                     ElementName="ReposPage" />
+                                                                        </MultiBinding>
+                                                                    </TextBlock.Visibility>
+                                                                </TextBlock>
+                                                            </Border>
+
+                                                            <!--
+                                                                发布通道：正式版（绿框）/ 预发布（橙框）。
+                                                                描边着色而非实心填充，避免在每项都压上色块。
+                                                            -->
+                                                            <Border x:Name="ChannelPill"
+                                                                    Margin="8,0,0,0"
+                                                                    Padding="6,2"
+                                                                    Background="Transparent"
+                                                                    BorderBrush="{DynamicResource Brush.Success}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="{StaticResource Radius.Badge}">
+                                                                <TextBlock x:Name="ChannelPillText"
+                                                                           Style="{StaticResource Text.Caption}"
+                                                                           Foreground="{DynamicResource Brush.Success}"
+                                                                           Text="正式版" />
+                                                            </Border>
+
+                                                            <!-- 草稿：中性胶囊 -->
+                                                            <Border Margin="8,0,0,0"
+                                                                    Padding="6,2"
+                                                                    Background="{DynamicResource Brush.Surface.Selected}"
+                                                                    CornerRadius="{StaticResource Radius.Badge}"
+                                                                    Visibility="{Binding IsDraft, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                                <TextBlock Style="{StaticResource Text.Caption}"
+                                                                           Foreground="{DynamicResource Brush.Text.Secondary}"
+                                                                           Text="草稿" />
+                                                            </Border>
+                                                        </StackPanel>
                                                     </Grid>
 
-                                                    <StackPanel Grid.Row="1"
-                                                                Margin="{StaticResource Space.Padding.Top.XS}"
-                                                                Orientation="Horizontal">
-                                                        <TextBlock x:Name="LatestDateLabel"
-                                                                   Style="{StaticResource Text.Secondary}"
-                                                                   Text="最新发布 · "
-                                                                   Visibility="Collapsed" />
-                                                        <TextBlock x:Name="NormalDateLabel"
-                                                                   Style="{StaticResource Text.Secondary}"
-                                                                   Text="发布于 " />
-                                                        <TextBlock Style="{StaticResource Text.Secondary}"
-                                                                   Text="{Binding PublishedAt, StringFormat={}{0:yyyy-MM-dd}}" />
-                                                        <TextBlock Margin="8,0,0,0"
-                                                                   Style="{StaticResource Text.Caption}"
-                                                                   Foreground="{DynamicResource Brush.Text.Secondary}"
-                                                                   Text="预发布"
-                                                                   Visibility="{Binding IsPrerelease, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                                        <TextBlock Margin="8,0,0,0"
-                                                                   Style="{StaticResource Text.Caption}"
-                                                                   Foreground="{DynamicResource Brush.Text.Secondary}"
-                                                                   Text="草稿"
-                                                                   Visibility="{Binding IsDraft, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                                    </StackPanel>
+                                                    <!-- 第二行：发布日期（"最新"已在上面用胶囊表达，此处不再重复前缀） -->
+                                                    <TextBlock Grid.Row="1"
+                                                               Margin="{StaticResource Space.Padding.Top.XS}"
+                                                               Style="{StaticResource Text.Secondary}"
+                                                               Text="{Binding PublishedAt, StringFormat={}{0:yyyy-MM-dd}}" />
                                                 </Grid>
                                                 <DataTemplate.Triggers>
-                                                    <!-- 最新项的日期前缀改为"最新发布 ·" -->
-                                                    <DataTrigger Value="Visible">
-                                                        <DataTrigger.Binding>
-                                                            <MultiBinding Converter="{StaticResource AreEqualToVisibilityConverter}">
-                                                                <Binding Path="TagName" />
-                                                                <Binding Path="DataContext.SelectedRow.LatestRelease.TagName"
-                                                                         ElementName="ReposPage" />
-                                                            </MultiBinding>
-                                                        </DataTrigger.Binding>
-                                                        <Setter TargetName="LatestDateLabel" Property="Visibility" Value="Visible" />
-                                                        <Setter TargetName="NormalDateLabel" Property="Visibility" Value="Collapsed" />
+                                                    <!-- 预发布：整颗胶囊改橙色 -->
+                                                    <DataTrigger Binding="{Binding IsPrerelease}" Value="True">
+                                                        <Setter TargetName="ChannelPill" Property="BorderBrush" Value="{DynamicResource Brush.Warning}" />
+                                                        <Setter TargetName="ChannelPillText" Property="Foreground" Value="{DynamicResource Brush.Warning}" />
+                                                        <Setter TargetName="ChannelPillText" Property="Text" Value="预发布" />
                                                     </DataTrigger>
                                                 </DataTemplate.Triggers>
                                             </DataTemplate>

@@ -75,7 +75,6 @@ public sealed class RepositoryRowViewModel
         // 同一问题若在两处判定，迟早会得出不一致的结论。
         StatusText = result.Outcome.Reason;
         HasUpdate = result.ShouldNotify;
-        IsBaseline = result.Outcome.Kind == DetectionOutcomeKind.NoBaseline;
         OutcomeKind = result.Outcome.Kind;
 
         LatestVersionText = result.LatestVersionText ?? "—";
@@ -174,23 +173,20 @@ public sealed class RepositoryRowViewModel
     /// <summary>本次比较所依据的已知版本文本。</summary>
     public string KnownVersionText { get; }
 
-    /// <summary>
-    /// 该行是否为"基准版本"（首次检测，无上次版本可比，<c>NoBaseline</c>）。
-    /// </summary>
-    /// <remarks>
-    /// 概览徽章据此区分"已是最新"（有基准且无更新）与"基准版本"（尚无基准）。
-    /// </remarks>
-    public bool IsBaseline { get; }
-
     /// <summary>领域层判定结论；用于把状态压缩成更短的行内文案。</summary>
     public DetectionOutcomeKind OutcomeKind { get; }
 
     /// <summary>
-    /// 是否"没有可展示的 Release"（无候选 / 仅草稿 / 仅预发布 / 版本无法解析）。
+    /// 是否"没有可展示的 Release"（判定结论为 NoCandidate / IgnoredDraft /
+    /// IgnoredPrerelease / IgnoredUnparsableTag）。
     /// </summary>
     /// <remarks>
-    /// 这类行既不是"已是最新"（绿）也不是"检测失败"（红），
-    /// 界面徽章应取中性色，避免把"数据源没东西"误读成"一切正常"。
+    /// 这类行不是"检测失败"（红），也不该显示成"已是最新"（绿）——
+    /// 绿会把"数据源没东西"误读成"一切正常"，故界面徽章取中性色。
+    /// <para>
+    /// 注意：首次检测（<c>NoBaseline</c>）不在此列 ——
+    /// 领域规则将其"视为已是最新"，有可展示的 Release，按绿色正常态处理。
+    /// </para>
     /// </remarks>
     public bool IsNoRelease =>
         OutcomeKind is DetectionOutcomeKind.NoCandidate
@@ -198,14 +194,24 @@ public sealed class RepositoryRowViewModel
             or DetectionOutcomeKind.IgnoredPrerelease
             or DetectionOutcomeKind.IgnoredUnparsableTag;
 
-    /// <summary>状态短文案：有新版本 / 已是最新 / 基准版本 / 暂无 Release / 检测失败 等。</summary>
+    /// <summary>
+    /// 状态短文案：有新版本 / 已是最新 / 暂无 Release / 仅预发布 / 版本无法解析 / 检测失败。
+    /// </summary>
     /// <remarks>
     /// <para>
     /// 与 <see cref="StatusText"/>（领域层完整原因说明）分工：
     /// 列表行只放两三个字的状态词，长说明留给右侧详情栏，
     /// 避免第一栏文字互相挤压（2026-10-11 用户要求）。
+    /// </para>
+    /// <para>
+    /// 2026-10-11 再调整：去掉"基准版本"与"仅草稿"两种状态 ——
+    /// 前者与"已是最新"同义（领域规则本就按已是最新处理），
+    /// 后者并入"暂无 Release"（草稿不对外发布，等于没有可展示内容）。
+    /// 状态种类越少，列表越容易一眼扫完。
+    /// </para>
+    /// <para>
     /// 颜色由界面按 <see cref="HasUpdate"/> / <see cref="HasError"/> /
-    /// <see cref="IsBaseline"/> / <see cref="IsNoRelease"/> 取语义画刷。
+    /// <see cref="IsNoRelease"/> 取语义画刷。
     /// </para>
     /// </remarks>
     public string BadgeText => HasError
@@ -214,9 +220,7 @@ public sealed class RepositoryRowViewModel
             ? "有新版本"
             : OutcomeKind switch
             {
-                DetectionOutcomeKind.NoBaseline => "基准版本",
-                DetectionOutcomeKind.NoCandidate => "暂无 Release",
-                DetectionOutcomeKind.IgnoredDraft => "仅草稿",
+                DetectionOutcomeKind.NoCandidate or DetectionOutcomeKind.IgnoredDraft => "暂无 Release",
                 DetectionOutcomeKind.IgnoredPrerelease => "仅预发布",
                 DetectionOutcomeKind.IgnoredUnparsableTag => "版本无法解析",
                 _ => "已是最新",

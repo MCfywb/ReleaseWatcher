@@ -596,6 +596,15 @@ public partial class MainWindow : Window
     private const double ReposNarrowThreshold = 960;
 
     /// <summary>
+    /// 三栏之间的间距（分割条所在列的宽度，与 XAML 保持一致）。
+    /// </summary>
+    /// <remarks>
+    /// 两条间距宽度相同，分割条的 1px 线画在各自间距的正中
+    /// （见 PaneSplitter 样式），因此视觉上间距均等、线不偏。
+    /// </remarks>
+    private const double ReposSplitterGutter = 8;
+
+    /// <summary>
     /// 检测列表三栏的宽度比例（三者和为 1）。
     /// </summary>
     /// <remarks>
@@ -613,9 +622,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!MasterCol.Width.IsStar || !HistoryCol.Width.IsStar || !DetailCol.Width.IsStar)
+        if (!MasterCol.Width.IsAbsolute || !HistoryCol.Width.IsAbsolute || !DetailCol.Width.IsAbsolute)
         {
-            // 窄屏模式下列宽是 0*/1*，那不是用户的比例意图，不保存。
+            // 窄屏模式下列宽是 0*/1*（非像素），那不是用户的比例意图，不保存。
             return;
         }
 
@@ -635,12 +644,80 @@ public partial class MainWindow : Window
         LayoutPreferences.SaveReposColumnRatios(_paths.ConfigFile, _reposColumnRatios);
     }
 
-    /// <summary>把保存的三栏比例应用到列宽（星型值；各栏 MinWidth 在 XAML 中兜底）。</summary>
+    /// <summary>
+    /// 把三栏比例落到<b>像素</b>列宽（各栏 MinWidth 取自 XAML，扣补差额保证总宽不变）。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>为什么用像素而不是星型（2026-10-11 用户反馈的根因）：</b>
+    /// 星型列宽下拖动一条分割线，GridSplitter 会连带重算所有星列的占比，
+    /// 表现为"往左/右拖，另一头的栏朝反方向动"。改成像素列宽后，
+    /// <c>ResizeBehavior=PreviousAndNext</c> 只增减<b>相邻两栏</b>，
+    /// 第三栏宽度固定不动 —— 这才是拖拽的直觉语义。
+    /// </para>
+    /// <para>
+    /// <b>比例语义仍然保留：</b>窗口缩放时 UpdatePanes 会按同一比例重新分配，
+    /// 用户拖拽的结果也会写回 config.json（见 SaveReposColumnRatios）。
+    /// </para>
+    /// </remarks>
     private void ApplyReposColumnRatios()
     {
-        MasterCol.Width = new GridLength(_reposColumnRatios[0], GridUnitType.Star);
-        HistoryCol.Width = new GridLength(_reposColumnRatios[1], GridUnitType.Star);
-        DetailCol.Width = new GridLength(_reposColumnRatios[2], GridUnitType.Star);
+        // 两条 8px 间距列（与 XAML 中分割条所在列宽一致）。
+        var available = ReposSplit.ActualWidth - (2 * ReposSplitterGutter);
+
+        if (available <= 0)
+        {
+            // 尚未测量（页面刚显示）：先用星型宽度顶上，等 SizeChanged 再落像素。
+            MasterCol.Width = new GridLength(_reposColumnRatios[0], GridUnitType.Star);
+            HistoryCol.Width = new GridLength(_reposColumnRatios[1], GridUnitType.Star);
+            DetailCol.Width = new GridLength(_reposColumnRatios[2], GridUnitType.Star);
+            return;
+        }
+
+        var widths = new[]
+        {
+            available * _reposColumnRatios[0],
+            available * _reposColumnRatios[1],
+            available * _reposColumnRatios[2],
+        };
+
+        // 最小宽度以 XAML 的 MinWidth 为单一来源，不在代码里再写一遍数字。
+        var minimums = new[] { MasterCol.MinWidth, HistoryCol.MinWidth, DetailCol.MinWidth };
+
+        // 按比例算出的宽度低于下限时，把缺口从还能让位的栏里扣回，
+        // 保证三栏宽度之和恰好等于可用宽度（不溢出、不留缝）。
+        for (var i = 0; i < widths.Length; i++)
+        {
+            if (widths[i] >= minimums[i])
+            {
+                continue;
+            }
+
+            var deficit = minimums[i] - widths[i];
+            widths[i] = minimums[i];
+
+            for (var j = 0; j < widths.Length && deficit > 0; j++)
+            {
+                if (i == j)
+                {
+                    continue;
+                }
+
+                var spare = widths[j] - minimums[j];
+                if (spare <= 0)
+                {
+                    continue;
+                }
+
+                var take = Math.Min(spare, deficit);
+                widths[j] -= take;
+                deficit -= take;
+            }
+        }
+
+        MasterCol.Width = new GridLength(widths[0], GridUnitType.Pixel);
+        HistoryCol.Width = new GridLength(widths[1], GridUnitType.Pixel);
+        DetailCol.Width = new GridLength(widths[2], GridUnitType.Pixel);
     }
 
     /// <summary>
