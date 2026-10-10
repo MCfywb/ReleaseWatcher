@@ -757,9 +757,11 @@ internal static class ThemeMetrics
 
     public static double WindowHeight => Read("Size.WindowHeight", 900);
 
-    public static double WindowMinWidth => Read("Size.WindowMinWidth", 1200);
+    // 最小尺寸 2026-10-11 下调为 800×640：原 1200×760 会让窗口拖不到
+    // 统计卡降为两列所需的宽度，窄屏布局无法触达。启动尺寸仍为 1440×900。
+    public static double WindowMinWidth => Read("Size.WindowMinWidth", 800);
 
-    public static double WindowMinHeight => Read("Size.WindowMinHeight", 760);
+    public static double WindowMinHeight => Read("Size.WindowMinHeight", 640);
 
     /// <summary>Sidebar 展开宽度的下限（10% 在窄窗口下放不下文字，取较大值保底）。</summary>
     public static double SidebarMinWidth => Read("Size.SidebarWidth.Min", 120);

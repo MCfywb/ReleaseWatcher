@@ -184,11 +184,18 @@
     <!-- Content 内边距：原文 Horizontal 28~32 / Vertical 24~32，取下限偏保守 -->
     <Thickness x:Key="Size.ContentPadding">28,24</Thickness>
 
-    <!-- 窗口尺寸（原文第 4.1 节） -->
+    <!--
+        窗口尺寸（原文第 4.1 节）。
+
+        最小尺寸 2026-10-11 下调：原 1200×760 会把窗口卡住，用户拖不到
+        "统计卡降为两列"所需的宽度（可用内容宽 < 720，约对应窗口宽 < 900），
+        窄屏布局因此在真机上根本无法到达。下调为 800×640 后：
+        最小宽 800 时可用内容约 624，确实能落到两列；启动尺寸仍为 1440×900。
+    -->
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-                x:Key="Size.WindowMinWidth">1200</sys:Double>
+                x:Key="Size.WindowMinWidth">800</sys:Double>
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-                x:Key="Size.WindowMinHeight">760</sys:Double>
+                x:Key="Size.WindowMinHeight">640</sys:Double>
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
                 x:Key="Size.WindowWidth">1440</sys:Double>
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
