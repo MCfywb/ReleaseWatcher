@@ -1,5 +1,7 @@
-﻿using System.Windows;
+﻿using System.Runtime.InteropServices;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using ReleaseWatcher.App.Animation;
@@ -120,26 +122,36 @@ public partial class MainWindow : Window
         // 用 Load 事件而非构造函数直接调用：构造函数此刻窗口尚未显示，
         // 启动一轮异步检测会让界面先闪一下空态再跳到有数据。
         Loaded += async (_, _) => await _overviewViewModel.Refresh();
+
+        // 无边框窗口默认丢失系统原生的 最小化/最大化/还原 动画（WindowStyle=None
+        // 去掉了 WS_CAPTION，DWM 据此跳过原生过渡）。窗口句柄就绪后补回相关样式位，
+        // 由 WindowChrome 的 GlassFrameThickness=0 保持这些样式不可见，仅用于恢复动画。
+        SourceInitialized += (_, _) => EnableNativeWindowAnimations();
     }
 
     // ==================== 标题栏 ====================
 
-    /// <summary>最小化。</summary>
+    /// <summary>最小化（交给系统原生 DWM 动画）。</summary>
+    /// <remarks>
+    /// 原生最小化动画依赖窗口具备 WS_CAPTION 样式位；无边框窗口默认没有，
+    /// 由 <see cref="EnableNativeWindowAnimations"/> 在句柄就绪后补回，故此处只改状态即可。
+    /// </remarks>
     private void Minimize_Click(object sender, RoutedEventArgs e)
         => WindowState = WindowState.Minimized;
 
-    /// <summary>最大化 / 还原切换。</summary>
+    /// <summary>最大化 / 还原切换（交给系统原生 DWM 动画）。</summary>
     private void Maximize_Click(object sender, RoutedEventArgs e)
         => WindowState = WindowState == WindowState.Maximized
             ? WindowState.Normal
             : WindowState.Maximized;
 
     /// <summary>
-    /// 关闭窗口。
+    /// 关闭窗口（与 Windows 系统原生一致：瞬时移除，无任何自定义动画）。
     /// </summary>
     /// <remarks>
-    /// ShutdownMode 为默认 OnLastWindowClose（D-049），
-    /// 最后一个窗口关闭即退出进程，无需额外处理。
+    /// Windows 本身没有"关闭"窗口的动画；自绘淡出反而偏离原生观感，
+    /// 违反 AGENTS.md §1.5 "实现必须是 Windows 原生" 的约束。
+    /// ShutdownMode 为默认 OnLastWindowClose（D-049），最后一个窗口关闭即退出进程。
     /// </remarks>
     private void Close_Click(object sender, RoutedEventArgs e)
         => Close();
@@ -156,6 +168,87 @@ public partial class MainWindow : Window
             WindowState == WindowState.Maximized
                 ? "WindowChrome.Geometry.Restore"
                 : "WindowChrome.Geometry.Maximize");
+    }
+
+    // ==================== 原生窗口动画：补回边框样式位 ====================
+
+    /// <summary>恢复无边框窗口的系统原生 最小化/最大化/还原 动画。</summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="WindowStyle"/>=None 会移除 WS_CAPTION，DWM 据此跳过原生过渡
+    /// （官方确认：borderless 窗口不播最小化/还原动画）。本方法在句柄就绪后把
+    /// WS_CAPTION / WS_THICKFRAME / WS_SYSMENU 等样式位 OR 回去，DWM 便会像对待
+    /// 普通窗口一样播放缩放过渡；视觉上这些样式由 <c>WindowChrome.GlassFrameThickness=0</c>
+    /// 保持不可见，故标题栏外观不变（自定义工具栏保留）。
+    /// </para>
+    /// <para>
+    /// 该做法要求窗口非透明（未设 AllowsTransparency）；本窗口满足。
+    /// 参考：StackOverflow #56175722、MS Learn "No minimize/restore animation after removing WindowStyle"。
+    /// </para>
+    /// </remarks>
+    private void EnableNativeWindowAnimations()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        int style = GetWindowLong(hwnd, GWL_STYLE);
+        style |= (int)(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
+        SetWindowLong(hwnd, GWL_STYLE, style);
+
+        // 强制非客户区重算，让新样式立即生效（不移动/不缩放/不激活）。
+        SetWindowPos(
+            hwnd, IntPtr.Zero, 0, 0, 0, 0,
+            SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
+    private const int GWL_STYLE = -16;
+    private const int SWP_FRAMECHANGED = 0x0020;
+    private const int SWP_NOMOVE = 0x0002;
+    private const int SWP_NOSIZE = 0x0001;
+    private const int SWP_NOZORDER = 0x0004;
+    private const int SWP_NOACTIVATE = 0x0010;
+
+    private const uint WS_CAPTION = 0x00C00000;
+    private const uint WS_THICKFRAME = 0x00040000;
+    private const uint WS_SYSMENU = 0x00080000;
+    private const uint WS_MAXIMIZEBOX = 0x00010000;
+    private const uint WS_MINIMIZEBOX = 0x00020000;
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLong")]
+    private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
+    private static extern IntPtr GetWindowLong64(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
+    private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
+    private static extern IntPtr SetWindowLong64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(
+        IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    private static int GetWindowLong(IntPtr hWnd, int nIndex)
+        => IntPtr.Size == 8
+            ? GetWindowLong64(hWnd, nIndex).ToInt32()
+            : GetWindowLong32(hWnd, nIndex);
+
+    private static void SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong)
+    {
+        if (IntPtr.Size == 8)
+        {
+            SetWindowLong64(hWnd, nIndex, new IntPtr(dwNewLong));
+        }
+        else
+        {
+            SetWindowLong32(hWnd, nIndex, dwNewLong);
+        }
     }
 
     // ==================== Sidebar ====================
