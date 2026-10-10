@@ -663,15 +663,13 @@ public partial class MainWindow : Window
 /// </remarks>
 internal static class ThemeMetrics
 {
-    // 2026-10-11 用户要求：启动窗口为正方形（1000 × 1000）。
-    // 回退值与 Spacing.xaml 的键保持一致，仅在该字典未合并时兜底。
-    public static double WindowWidth => Read("Size.WindowWidth", 1000);
+    public static double WindowWidth => Read("Size.WindowWidth", 1440);
 
-    public static double WindowHeight => Read("Size.WindowHeight", 1000);
+    public static double WindowHeight => Read("Size.WindowHeight", 900);
 
-    public static double WindowMinWidth => Read("Size.WindowMinWidth", 800);
+    public static double WindowMinWidth => Read("Size.WindowMinWidth", 1200);
 
-    public static double WindowMinHeight => Read("Size.WindowMinHeight", 640);
+    public static double WindowMinHeight => Read("Size.WindowMinHeight", 760);
 
     /// <summary>Sidebar 展开宽度的下限（10% 在窄窗口下放不下文字，取较大值保底）。</summary>
     public static double SidebarMinWidth => Read("Size.SidebarWidth.Min", 120);
