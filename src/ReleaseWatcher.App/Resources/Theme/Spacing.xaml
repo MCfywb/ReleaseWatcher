@@ -143,11 +143,13 @@
          ============================================================ -->
 
     <!--
-        Sidebar 展开宽度 = 200：对齐参考项目 BililiveRecorder 的
-        NavigationView OpenPaneLength，其导航项按 8px 网格排布。
+        Sidebar 展开宽度 = 窗口宽度 × 10%（2026-10-11 用户要求），
+        由 MainWindow 按窗口实际宽度运行时计算，不再用固定键。
+        此处仅定义其**下限**：正方形窗口（宽 1000）下 10% 只有 100px，
+        放不下"图标 + 文字"导航项（约需 120px），故与 120 取较大值。
     -->
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-                x:Key="Size.SidebarWidth">200</sys:Double>
+                x:Key="Size.SidebarWidth.Min">120</sys:Double>
     <!--
         Sidebar 收起态宽度 = 48：对应 WinUI NavigationView 的
         CompactPaneLength 标准值（仅图标、图标居中）。

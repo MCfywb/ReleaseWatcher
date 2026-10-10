@@ -97,8 +97,19 @@ public partial class MainWindow : Window
 
         // 应用 Sidebar 初始状态（展开：宽度按设计系统、图标靠左）。
         // 注意宽度不能在 XAML 绑定：ColumnDefinition.Width 是 GridLength，
-        // 而 Size.SidebarWidth 是 sys:Double，绑定会在启动时抛 XamlParseException。
+        // 而"窗口宽 × 10%"这类比例值需运行时计算，静态绑定无法表达。
         ApplySidebarState(animate: false);
+
+        // 窗口尺寸变化（含最大化）时，展开态侧边栏按"10% 窗口宽"重算。
+        // 刻意只改列宽、不走 ApplySidebarState：后者会重播导航文字淡入，
+        // 连续缩放窗口时文字会不停闪烁。
+        SizeChanged += (_, _) =>
+        {
+            if (_sidebarExpanded && SidebarColumn is not null)
+            {
+                SidebarColumn.Width = new GridLength(ComputeSidebarWidth(), GridUnitType.Pixel);
+            }
+        };
 
         // 初始页：XAML 里 IsChecked="True" 触发的 Checked 事件发生在解析期间，
         // 已被 Nav_Checked 的 null 保护忽略，故此处在 InitializeComponent()
@@ -270,6 +281,25 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 侧边栏展开宽度占窗口宽度的比例（2026-10-11 用户要求：10%）。
+    /// </summary>
+    private const double SidebarWidthRatio = 0.10;
+
+    /// <summary>
+    /// 按当前窗口宽度计算展开态侧边栏宽度：10% 与最小宽 120 取较大值。
+    /// </summary>
+    /// <remarks>
+    /// 下限来自 <c>Size.SidebarWidth.Min</c>（单一来源）：正方形窗口（宽 1000）
+    /// 下 10% 只有 100px，放不下"图标 + 文字"导航项。
+    /// </remarks>
+    private double ComputeSidebarWidth()
+    {
+        // 构造阶段窗口尚未布局，ActualWidth 为 0，退回显式设置的 Width。
+        var windowWidth = ActualWidth > 0 ? ActualWidth : Width;
+        return Math.Max(windowWidth * SidebarWidthRatio, ThemeMetrics.SidebarMinWidth);
+    }
+
+    /// <summary>
     /// 把 Sidebar 的当前状态落到界面。
     /// </summary>
     /// <remarks>
@@ -294,7 +324,7 @@ public partial class MainWindow : Window
     private void ApplySidebarState(bool animate = false)
     {
         var target = _sidebarExpanded
-            ? ThemeMetrics.SidebarWidth
+            ? ComputeSidebarWidth()
             : ThemeMetrics.SidebarCollapsedWidth;
 
         if (animate && SidebarColumn is not null)
@@ -617,8 +647,8 @@ internal static class ThemeMetrics
 
     public static double WindowMinHeight => Read("Size.WindowMinHeight", 640);
 
-    /// <summary>Sidebar 展开宽度。</summary>
-    public static double SidebarWidth => Read("Size.SidebarWidth", 220);
+    /// <summary>Sidebar 展开宽度的下限（10% 在窄窗口下放不下文字，取较大值保底）。</summary>
+    public static double SidebarMinWidth => Read("Size.SidebarWidth.Min", 120);
 
     /// <summary>Sidebar 收起宽度（仅图标）。</summary>
     public static double SidebarCollapsedWidth => Read("Size.SidebarWidth.Collapsed", 52);

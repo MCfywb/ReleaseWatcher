@@ -406,10 +406,10 @@
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <!--
-                    Width 由代码设置（ToggleSidebar_Click / 构造函数）：
-                    ColumnDefinition.Width 是 GridLength，而 Size.SidebarWidth 是
-                    sys:Double —— 直接绑定会抛 XamlParseException（编译期不报错）。
-                    尺寸仍在 Spacing.xaml 里，只是经代码读取，保持单一来源。
+                    Width 由代码设置（展开 = 窗口宽 × 10% 与 120 取较大值，
+                    收起 = 48）：ColumnDefinition.Width 是 GridLength，而比例宽度
+                    需按窗口实际宽度运行时计算，无法用静态绑定表达。
+                    下限 120 来自 Spacing.xaml 的 Size.SidebarWidth.Min（单一来源）。
                 -->
                 <ColumnDefinition x:Name="SidebarColumn" />
                 <ColumnDefinition Width="*" />
