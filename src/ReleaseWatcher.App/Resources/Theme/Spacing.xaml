@@ -182,15 +182,22 @@
     <!-- Content 内边距：原文 Horizontal 28~32 / Vertical 24~32，取下限偏保守 -->
     <Thickness x:Key="Size.ContentPadding">28,24</Thickness>
 
-    <!-- 窗口尺寸（原文第 4.1 节） -->
+    <!--
+        窗口尺寸。
+
+        2026-10-11 用户要求：启动窗口改为正方形（1000 × 1000）。
+        最小尺寸同步下调到 800 × 640 —— 原最小宽 1200 大于新启动宽 1000，
+        WPF 会把 Width 钳制到 MinWidth，导致"正方形"名存实亡；
+        下调后启动尺寸才真正生效。
+    -->
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-                x:Key="Size.WindowMinWidth">1200</sys:Double>
+                x:Key="Size.WindowMinWidth">800</sys:Double>
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-                x:Key="Size.WindowMinHeight">760</sys:Double>
+                x:Key="Size.WindowMinHeight">640</sys:Double>
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-                x:Key="Size.WindowWidth">1440</sys:Double>
+                x:Key="Size.WindowWidth">1000</sys:Double>
     <sys:Double xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-                x:Key="Size.WindowHeight">900</sys:Double>
+                x:Key="Size.WindowHeight">1000</sys:Double>
 
 <!-- ============================================================
      控件高度
