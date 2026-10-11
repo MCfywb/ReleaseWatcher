@@ -359,6 +359,19 @@ public sealed partial class RepositoryListViewModel : ObservableObject
     private RepositoryRowViewModel? _selectedRow;
     private Release? _selectedRelease;
 
+    /// <summary>
+    /// 切换仓库期间抑制中栏 ListBox 对 <see cref="SelectedRelease"/> 的回写。
+    /// </summary>
+    /// <remarks>
+    /// 中栏 <c>ListBox</c> 的 <c>ItemsSource</c> 绑 <c>SelectedRow.Releases</c>、
+    /// <c>SelectedItem</c> 双向绑 <c>SelectedRelease</c>。切仓库时 ItemsSource 先换成
+    /// 新仓库的集合，而旧的 SelectedItem 不在其中，WPF 会回写一次 <c>null</c>。
+    /// 该回写会让右栏瞬间退回空态（居中文案）再显示内容 ——
+    /// 表现为"内容顿一下、先显示在中间，然后才贴到标题下面"
+    /// （2026-10-12 用户反馈）。故在整段切换期间忽略该次 null 回写。
+    /// </remarks>
+    private bool _suppressReleaseWriteBack;
+
     /// <summary>构造检测列表 ViewModel。</summary>
     /// <param name="feed">Release 数据来源（取历史列表用）。</param>
     /// <param name="detectionService">检测用例。</param>
@@ -429,21 +442,27 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         get => _selectedRow;
         set
         {
-            if (!SetProperty(ref _selectedRow, value))
+            // 仓库与其默认 Release 在抑制窗口内一次定好：
+            // 先通知 SelectedRow（中栏 ListBox 换成新集合），再定 SelectedRelease。
+            // 期间 ListBox 因旧 SelectedItem 不在新集合里回写的 null 被忽略，
+            // 右栏因此不再闪出居中空态，内容直接贴在"Release 详情"标题下方。
+            _suppressReleaseWriteBack = true;
+            try
             {
-                return;
-            }
+                if (!SetProperty(ref _selectedRow, value))
+                {
+                    return;
+                }
 
-            if (value is null)
-            {
-                // 取消选中仓库时同步清空右栏详情目标：否则 SelectedRelease 会残留旧值，
-                // 导致"检测列表无选中项时 Release 详情内容仍显示"的泄漏
-                // （用户 2026-10-12 要求：无选中项时详情内容全部隐藏）。
-                SelectedRelease = null;
+                _selectedRelease = value is null
+                    ? null // 取消选中仓库时同步清空右栏详情目标，避免旧 Release 残留泄漏
+                    : value.LatestRelease ?? value.Releases.FirstOrDefault();
+
+                OnPropertyChanged(nameof(SelectedRelease));
             }
-            else
+            finally
             {
-                SelectedRelease = value.LatestRelease ?? value.Releases.FirstOrDefault();
+                _suppressReleaseWriteBack = false;
             }
 
             RaiseSelectionVisualState();
@@ -460,6 +479,13 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         get => _selectedRelease;
         set
         {
+            // 切仓库期间忽略中栏 ListBox 因 ItemsSource 变化回写的 null，
+            // 避免右栏闪回空态（详见 _suppressReleaseWriteBack 的说明）。
+            if (_suppressReleaseWriteBack && value is null)
+            {
+                return;
+            }
+
             // 不变量：无选中仓库时不得有选中 Release。
             // 防御中栏 ListBox 在 ItemsSource 变化期间的回写等旁路写入 ——
             // 否则会复现"检测列表无选中项但 Release 详情仍显示"的泄漏
