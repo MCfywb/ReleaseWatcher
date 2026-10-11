@@ -1195,13 +1195,21 @@
                                     <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.CardTitle}"
                                                Margin="12,12,12,4"
                                                Text="Release 历史" />
-                                    <!-- 空态：未选仓库 / 仓库没有 Release（与列表互斥淡入） -->
+                                    <!--
+                                        空态：未选仓库 / 仓库没有 Release。
+                                        这里刻意用原生 Visibility 而非动画原语：它是
+                                        DockPanel.Dock="Top"，淡出期间仍占位，会把下方
+                                        ListBox 整体顶偏；从"无 Release 的仓库"切到
+                                        "有 Release 的仓库"时，那段淡出表现为内容先下沉
+                                        一条空白带再跳回（2026-10-12 用户反馈）。
+                                        与列表互斥的淡入淡出交给下方的 ListBox 承担。
+                                    -->
                                     <TextBlock DockPanel.Dock="Top"
                                                Style="{StaticResource PlaceholderBody}"
                                                HorizontalAlignment="Center"
                                                Margin="{StaticResource Space.Margin.M}"
                                                Text="{Binding HistoryEmptyText}"
-                                               anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding HistoryEmptyVisibility}" />
+                                               Visibility="{Binding HistoryEmptyVisibility}" />
                                     <ListBox Style="{StaticResource PaneList}"
                                              ItemContainerStyle="{StaticResource PaneListItem}"
                                              ItemsSource="{Binding SelectedRow.Releases}"
@@ -1336,13 +1344,19 @@
                                                Margin="12,12,12,4"
                                                Text="Release 详情"
                                                Visibility="{Binding DetailPaneHeaderVisibility}" />
-                                    <!-- 空态：未选仓库 / 仓库没有 Release（与详情内容互斥淡入） -->
+                                    <!--
+                                        空态：已选仓库但未选中任何 Release。
+                                        与中栏同理用原生 Visibility：DockPanel 停靠的
+                                        提示淡出期间仍占位，会把下方详情内容顶出一条
+                                        空白带（2026-10-12 用户反馈：从无 Release 的
+                                        仓库切到有 Release 的仓库时仍见空白）。
+                                    -->
                                     <TextBlock DockPanel.Dock="Top"
                                                Style="{StaticResource PlaceholderBody}"
                                                HorizontalAlignment="Center"
                                                Margin="{StaticResource Space.Margin.M}"
                                                Text="{Binding DetailEmptyText}"
-                                               anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding DetailEmptyVisibility}" />
+                                               Visibility="{Binding DetailEmptyVisibility}" />
 
                                     <!--
                                         外层原生 Visibility 兜底：内层走动画原语淡入淡出，

@@ -112,21 +112,31 @@ public static class AnimatedVisibilityHelper
         // 先淡出，动画结束后再收起，避免硬切。
         var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
             element.Opacity, 0, duration);
+        fadeOut.Completed += (_, _) =>
+        {
+            CancelPendingCollapse(element);
+
+            // 期间若又被切回可见，则不收起。
+            if (GetAnimatedVisibility(d) == Visibility.Collapsed)
+            {
+                element.Visibility = Visibility.Collapsed;
+            }
+        };
         element.BeginAnimation(UIElement.OpacityProperty, fadeOut);
 
         // 兜底收起：淡出被后续动画打断时 Completed 不会触发，元素会以 opacity 0
-        // 继续占据布局空间，把下方内容顶偏。用计时器保证"目标为 Collapsed 时
-        // 最终一定收起"，不再依赖动画是否跑完。
+        // 继续占据布局空间，把下方内容顶偏。计时器只在"动画确实没跑完"时接管，
+        // 间隔取得比动画时长宽裕（120ms），正常路径不会先于 Completed 触发，
+        // 从而消除"已经透明却仍占位"的空档。
         var timer = new DispatcherTimer
         {
-            Interval = duration + TimeSpan.FromMilliseconds(40),
+            Interval = duration + TimeSpan.FromMilliseconds(120),
         };
         timer.Tick += (_, _) =>
         {
             timer.Stop();
             CancelPendingCollapse(element);
 
-            // 期间若又被切回可见，则不收起。
             if (GetAnimatedVisibility(d) == Visibility.Collapsed)
             {
                 element.Visibility = Visibility.Collapsed;
