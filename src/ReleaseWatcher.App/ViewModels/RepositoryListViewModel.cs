@@ -434,12 +434,19 @@ public sealed partial class RepositoryListViewModel : ObservableObject
                 return;
             }
 
-            RaiseSelectionVisualState();
-
-            if (value is not null)
+            if (value is null)
+            {
+                // 取消选中仓库时同步清空右栏详情目标：否则 SelectedRelease 会残留旧值，
+                // 导致"检测列表无选中项时 Release 详情内容仍显示"的泄漏
+                // （用户 2026-10-12 要求：无选中项时详情内容全部隐藏）。
+                SelectedRelease = null;
+            }
+            else
             {
                 SelectedRelease = value.LatestRelease ?? value.Releases.FirstOrDefault();
             }
+
+            RaiseSelectionVisualState();
         }
     }
 
@@ -532,9 +539,13 @@ public sealed partial class RepositoryListViewModel : ObservableObject
     public Visibility DetailContentVisibility
         => SelectedRelease is not null ? Visibility.Visible : Visibility.Collapsed;
 
+    /// <summary>右栏标题"Release 详情"的可见性：无选中仓库时隐藏，使整块内容为空。</summary>
+    public Visibility DetailPaneHeaderVisibility
+        => SelectedRow is not null ? Visibility.Visible : Visibility.Collapsed;
+
     /// <summary>右栏空态文案；<c>null</c> 表示不显示空态。</summary>
     public string? DetailEmptyText => SelectedRow is null
-        ? "选择一个仓库以查看版本详情"
+        ? null // 无选中仓库时整段隐藏，不显示引导文案（用户 2026-10-12 要求）
         : SelectedRelease is null
             ? "该仓库暂无符合条件的 Release"
             : null;
@@ -604,6 +615,7 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         OnPropertyChanged(nameof(HistoryEmptyText));
         OnPropertyChanged(nameof(HistoryEmptyVisibility));
         OnPropertyChanged(nameof(DetailContentVisibility));
+        OnPropertyChanged(nameof(DetailPaneHeaderVisibility));
         OnPropertyChanged(nameof(DetailEmptyText));
         OnPropertyChanged(nameof(DetailEmptyVisibility));
         OnPropertyChanged(nameof(AssetListVisibility));

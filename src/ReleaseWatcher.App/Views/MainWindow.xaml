@@ -1334,7 +1334,8 @@
                                 <DockPanel LastChildFill="True">
                                     <TextBlock DockPanel.Dock="Top" Style="{StaticResource Text.CardTitle}"
                                                Margin="12,12,12,4"
-                                               Text="Release 详情" />
+                                               Text="Release 详情"
+                                               Visibility="{Binding DetailPaneHeaderVisibility}" />
                                     <!-- 空态：未选仓库 / 仓库没有 Release（与详情内容互斥淡入） -->
                                     <TextBlock DockPanel.Dock="Top"
                                                Style="{StaticResource PlaceholderBody}"
