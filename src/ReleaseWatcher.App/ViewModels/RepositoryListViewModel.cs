@@ -61,6 +61,18 @@ public sealed class RepositoryRowViewModel
         Releases = (releases ?? Array.Empty<Release>())
             .OrderByDescending(r => r.PublishedAt)
             .ToArray();
+
+        // 当前/已知版本在历史中对应的 tag：用于中栏"·当前版本"标记。
+        // 用 KnownVersion 做语义匹配（TagName 可能带 "v"/"release-" 前缀，TryParse 会剥离），
+        // 匹配不到（如已知版本不在近期历史）则为 null，界面不显示该标记。
+        var known = result.KnownVersion;
+        CurrentVersionTag = known is null
+            ? null
+            : (releases ?? Array.Empty<Release>())
+                .FirstOrDefault(r => SemanticVersion.TryParse(r.TagName, out var v)
+                                     && v is not null
+                                     && v.Equals(known))?
+                .TagName;
     }
 
     /// <summary>构造显示模型（正常检测结果，无 Release 历史）。</summary>
@@ -101,6 +113,9 @@ public sealed class RepositoryRowViewModel
 
         LatestRelease = release;
         Releases = Array.Empty<Release>();
+
+        // 单参构造用于不需要历史的场景（如概览摘要），无已知版本匹配上下文。
+        CurrentVersionTag = null;
     }
 
     private RepositoryRowViewModel(RepositoryRef repository, string errorText)
@@ -264,6 +279,15 @@ public sealed class RepositoryRowViewModel
     /// <remarks>中栏历史列表用它给"最新"项做高亮标记；与 <see cref="LatestRelease"/> 一致。</remarks>
     public Release? LatestRelease { get; }
 
+    /// <summary>当前/已知版本对应的 Release tag；用于中栏历史标记"·当前版本"。无匹配时为 <c>null</c>。</summary>
+    /// <remarks>
+    /// 与 <see cref="LatestRelease"/> 区分：<see cref="LatestRelease"/> 是"最新合格项"（有更新时比已知版本新），
+    /// 本属性是用户已知/已装版本（检测依据的 <c>KnownVersion</c>）在历史中对应的 tag。
+    /// 仅当 KnownVersion 能语义匹配到某个历史 Release 时才给出（如已知版本不在近期历史则匹配不到，界面不显示）；
+    /// 界面据此在对应行日期右侧追加"·当前版本"（2026-10-12 用户要求）。
+    /// </remarks>
+    public string? CurrentVersionTag { get; }
+
     /// <summary>把字节数格式化为易读文本。</summary>
     /// <remarks>
     /// 用 invariant 的数字格式再补单位，避免不同区域设置下
@@ -395,7 +419,9 @@ public sealed partial class RepositoryListViewModel : ObservableObject
     /// </para>
     /// <para>
     /// 选中仓库的同时默认选中其最新合格 Release ——
-    /// 保证右栏立即有内容，用户不会先看到两块空白（2026-10-11 用户要求）。
+    /// 用户点进某个仓库时右栏立即有内容。注意：进入检测列表页与"立即检查"
+    /// 刷新都不会主动选中任何项（2026-10-12 用户要求：默认不选中、刷新保留选择），
+    /// 仅用户显式点击才写入本属性。
     /// </para>
     /// </remarks>
     public RepositoryRowViewModel? SelectedRow
@@ -571,42 +597,6 @@ public sealed partial class RepositoryListViewModel : ObservableObject
             ? "本次发布未附带说明。"
             : SelectedRelease!.Notes;
 
-    /// <summary>
-    /// 若当前没有选中仓库，则默认选中"第一个有可用更新"的仓库。
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// 目标：进入检测列表页时三栏立即有内容，而不是两块大面积空白
-    /// （2026-10-11 用户要求）。优先级：第一个有更新 → 第一个有 Release →
-    /// 第一行。
-    /// </para>
-    /// <para>
-    /// 已有选择时不覆盖，尊重用户的浏览状态；检测刷新会整体重建行并
-    /// 清空选择，因此刷新后自然落到默认项。
-    /// </para>
-    /// </remarks>
-    public void EnsureDefaultSelection()
-    {
-        if (Rows.Count == 0)
-        {
-            SelectedRow = null;
-            SelectedRelease = null;
-            return;
-        }
-
-        if (SelectedRow is not null)
-        {
-            return;
-        }
-
-        var row = Rows.FirstOrDefault(r => r.HasUpdate)
-            ?? Rows.FirstOrDefault(r => r.Releases.Count > 0)
-            ?? Rows[0];
-
-        // setter 会连带默认选中其最新合格 Release。
-        SelectedRow = row;
-    }
-
     /// <summary>选中态变化后，统一通知所有派生显示属性。</summary>
     private void RaiseSelectionVisualState()
     {
@@ -663,8 +653,12 @@ public sealed partial class RepositoryListViewModel : ObservableObject
 
             // 整体替换而非逐行增删：检测结果每次都是"当前快照"，
             // 逐行 diff 只会带来无谓的闪烁。
-            // 行实例被整体重建，旧选中引用随之失效，必须一并清空，
-            // 否则窄屏视图会停在指向已丢弃对象的"上一级"。
+            // 行实例被整体重建，旧选中引用随之失效，故先记录当前选择的"身份"，
+            // 重建后按身份恢复，保证"立即检查"与页面来回切换不会丢失用户选择
+            // （2026-10-12 用户要求：保留选中项；进入检测列表默认不选中）。
+            var selectedRepoText = _selectedRow?.RepositoryText;
+            var selectedTag = _selectedRelease?.TagName;
+
             SelectedRow = null;
             SelectedRelease = null;
 
@@ -672,6 +666,27 @@ public sealed partial class RepositoryListViewModel : ObservableObject
             foreach (var row in newRows)
             {
                 Rows.Add(row);
+            }
+
+            // 按身份恢复选择：仓库标识 + Release tag 重新定位到新实例。
+            // 用户原先没选中任何项时 selectedRepoText 为 null，自然保持"无选中"。
+            if (selectedRepoText is not null)
+            {
+                var row = Rows.FirstOrDefault(r => r.RepositoryText == selectedRepoText);
+                if (row is not null)
+                {
+                    // setter 连带默认选中其最新合格 Release；
+                    // 若用户原先看的是具体某个 Release，则精确恢复该行。
+                    SelectedRow = row;
+                    if (selectedTag is not null)
+                    {
+                        var release = row.Releases.FirstOrDefault(r => r.TagName == selectedTag);
+                        if (release is not null)
+                        {
+                            SelectedRelease = release;
+                        }
+                    }
+                }
             }
 
             var updateCount = newRows.Count(r => r.HasUpdate);
@@ -682,9 +697,8 @@ public sealed partial class RepositoryListViewModel : ObservableObject
 
             EmptyStateVisibility = Rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-            // 行已整体重建且选择已清空：默认选中第一个有可用更新的仓库，
-            // 让三栏立即有内容而不是两块空白（2026-10-11 用户要求）。
-            EnsureDefaultSelection();
+            // 注：不再调用 EnsureDefaultSelection —— 进入检测列表默认不选中，
+            // 且刷新须保留用户当前选择（2026-10-12 用户要求）。
         }
         finally
         {

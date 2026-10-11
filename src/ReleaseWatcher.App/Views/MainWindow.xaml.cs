@@ -445,12 +445,11 @@ public partial class MainWindow : Window
             new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
 
         // 切换到检测列表页时，按当前窗口宽度重算三栏布局
-        // （页签由隐藏转可见不会自动触发 SizeChanged）；
-        // 并确保有选中仓库（默认选第一个有可用更新的，见 EnsureDefaultSelection），
-        // 让三栏立即有内容而不是两块空白。
+        // （页签由隐藏转可见不会自动触发 SizeChanged）。
+        // 注意：不在此处自动选中仓库 —— 进入检测列表默认不选中（2026-10-12 用户要求），
+        // 且选中态由 ViewModel 持有，页面来回切换天然保留，无需额外处理。
         if (page == ReposPage)
         {
-            _repositoryList.EnsureDefaultSelection();
             UpdatePanes();
         }
     }
