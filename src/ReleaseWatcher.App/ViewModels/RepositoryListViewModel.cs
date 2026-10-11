@@ -450,26 +450,26 @@ public sealed partial class RepositoryListViewModel : ObservableObject
 
     /// <summary>当前选中的 Release（右栏详情目标）；未选中为 <c>null</c>。</summary>
     /// <remarks>
+    /// <para>
     /// setter 公开供中栏 <c>ListBox.SelectedItem</c> 双向绑定直接写入：
-    /// 用户点选某个 Release 后右栏同步更新。
+    /// 用户点选某个 Release 后右栏同步更新；<b>取消选中（写入 <c>null</c>）
+    /// 同样是合法操作</b>，此时右栏退回"选择一个版本以显示详情"的提示。
+    /// </para>
+    /// <para>
+    /// 切仓库时不会因此闪空态：<see cref="SelectedRow"/> 的 setter 先通知行变更
+    /// （中栏 ListBox 换ItemsSource 时的清空回写会被接受），紧接着直接改写
+    /// <c>_selectedRelease</c> 并通知，全部发生在同一个同步块内，
+    /// 派生显示属性只在末尾统一通知一次，界面不会渲染出中间态。
+    /// </para>
     /// </remarks>
     public Release? SelectedRelease
     {
         get => _selectedRelease;
         set
         {
-            // null 一律不经过公开 setter：中栏 ListBox 在 ItemsSource 变化期间及之后
-            // 会回写 null（时序既有同步也有异步），任何一次被接受都会让右栏
-            // 先闪回居中空态、再恢复内容（2026-10-12 用户两轮反馈）。
-            // 显式清空只走 <see cref="ClearSelectedRelease"/>（返回键 / 切换仓库 / 刷新）。
-            if (value is null)
-            {
-                return;
-            }
-
-            // 不变量：无选中仓库时不接受选中 Release（防旁路写入，
+            // 不变量：无选中仓库时不得有选中 Release（防旁路写入，
             // 否则会复现"检测列表无选中项但 Release 详情仍显示"的泄漏）。
-            if (_selectedRow is null)
+            if (_selectedRow is null && value is not null)
             {
                 return;
             }
