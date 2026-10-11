@@ -460,6 +460,15 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         get => _selectedRelease;
         set
         {
+            // 不变量：无选中仓库时不得有选中 Release。
+            // 防御中栏 ListBox 在 ItemsSource 变化期间的回写等旁路写入 ——
+            // 否则会复现"检测列表无选中项但 Release 详情仍显示"的泄漏
+            // （2026-10-12 用户截图）。
+            if (_selectedRow is null && value is not null)
+            {
+                value = null;
+            }
+
             if (!SetProperty(ref _selectedRelease, value))
             {
                 return;
@@ -535,9 +544,23 @@ public sealed partial class RepositoryListViewModel : ObservableObject
     public Visibility HistoryEmptyVisibility
         => HistoryEmptyText is null ? Visibility.Collapsed : Visibility.Visible;
 
-    /// <summary>右栏详情内容的可见性：有选中 Release 时可见。</summary>
+    /// <summary>右栏详情内容的可见性：有选中仓库且选中 Release 时可见（双条件防御）。</summary>
     public Visibility DetailContentVisibility
-        => SelectedRelease is not null ? Visibility.Visible : Visibility.Collapsed;
+        => SelectedRow is not null && SelectedRelease is not null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    /// <summary>右栏详情标题：Release 标题，为空时退回 TagName（Release 实体约定）。</summary>
+    public string DetailTitleText
+    {
+        get
+        {
+            var title = SelectedRelease?.Title;
+            return string.IsNullOrWhiteSpace(title)
+                ? SelectedRelease?.TagName ?? string.Empty
+                : title!;
+        }
+    }
 
     /// <summary>右栏标题"Release 详情"的可见性：无选中仓库时隐藏，使整块内容为空。</summary>
     public Visibility DetailPaneHeaderVisibility
@@ -616,6 +639,7 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         OnPropertyChanged(nameof(HistoryEmptyVisibility));
         OnPropertyChanged(nameof(DetailContentVisibility));
         OnPropertyChanged(nameof(DetailPaneHeaderVisibility));
+        OnPropertyChanged(nameof(DetailTitleText));
         OnPropertyChanged(nameof(DetailEmptyText));
         OnPropertyChanged(nameof(DetailEmptyVisibility));
         OnPropertyChanged(nameof(AssetListVisibility));

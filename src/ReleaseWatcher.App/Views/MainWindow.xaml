@@ -1344,16 +1344,24 @@
                                                Text="{Binding DetailEmptyText}"
                                                anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding DetailEmptyVisibility}" />
 
+                                    <!--
+                                        外层原生 Visibility 兜底：内层走动画原语淡入淡出，
+                                        但若动画收起路径失效（淡出被打断等），此层仍由
+                                        WPF 绑定同步收起，保证"无选中时详情内容必然隐藏"
+                                        （2026-10-12 用户截图复现残留内容后加固）。
+                                    -->
+                                    <Border Visibility="{Binding DetailContentVisibility}">
                                     <ScrollViewer Padding="12,4,12,16"
                                                   HorizontalScrollBarVisibility="Disabled"
                                                   VerticalScrollBarVisibility="Auto"
                                                   anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding DetailContentVisibility}">
                                         <StackPanel>
                                             <!-- ===== 区块一：版本信息 ===== -->
+                                            <!-- 标题为空时退回 TagName（Release 实体约定，2026-10-12 截图出现空标题行后修复） -->
                                             <TextBlock Style="{StaticResource Text.PageTitle}"
-                                                       Text="{Binding SelectedRelease.Title}"
+                                                       Text="{Binding DetailTitleText}"
                                                        TextTrimming="CharacterEllipsis"
-                                                       ToolTip="{Binding SelectedRelease.Title}" />
+                                                       ToolTip="{Binding DetailTitleText}" />
                                             <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
                                                        Style="{StaticResource Text.Secondary}"
                                                        Text="{Binding SelectedRow.RepositoryText}" />
@@ -1460,6 +1468,7 @@
                                             </ItemsControl>
                                         </StackPanel>
                                     </ScrollViewer>
+                                    </Border>
                                 </DockPanel>
                             </Border>
                         </Grid>
