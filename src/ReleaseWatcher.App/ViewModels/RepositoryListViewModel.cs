@@ -597,10 +597,16 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         => SelectedRow is not null ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>右栏空态文案；<c>null</c> 表示不显示空态。</summary>
+    /// <remarks>
+    /// 已选中仓库但中栏未选中任何 Release 时，右栏除这条提示外整块为空。
+    /// 文案说的是"去中栏选一个版本"，而不是断言仓库里没有 Release ——
+    /// 后者只对确实无 Release 的仓库成立，对其余情况是误导
+    /// （2026-10-12 用户要求）。
+    /// </remarks>
     public string? DetailEmptyText => SelectedRow is null
         ? null // 无选中仓库时整段隐藏，不显示引导文案（用户 2026-10-12 要求）
         : SelectedRelease is null
-            ? "该仓库暂无符合条件的 Release"
+            ? "选择一个版本以显示详情"
             : null;
 
     /// <summary>右栏空态的可见性（与 <see cref="DetailEmptyText"/> 联动）。</summary>
