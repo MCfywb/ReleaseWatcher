@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Threading;
 
 namespace ReleaseWatcher.App.Animation;
 
@@ -30,12 +31,23 @@ public static class AnimatedVisibilityHelper
             new PropertyMetadata(0.16));
 
     /// <summary>要呈现的目标可见性；值变化时自动播放过渡。</summary>
+    /// <remarks>
+    /// <b>默认值必须是 <see cref="Visibility.Visible"/>。</b>
+    /// WPF 在"绑定推入的值与依赖属性当前有效值相同"时**不会触发属性变更回调**。
+    /// 若默认值取 <c>Collapsed</c>，当绑定初值恰为 <c>Collapsed</c>（例如尚未选中任何
+    /// Release 时）回调就不会触发，元素会停留在 XAML 默认的 <c>Visible</c> 上：
+    /// 空态文本块以空文本继续占位，把下方内容整体顶偏。
+    /// 2026-10-12 现场取证即此故障：右栏详情内容被下移 52px（20 高度 + 16×2 边距），
+    /// 直到某次真正发生 <c>Visible→Collapsed</c> 变化才淡出收起、内容瞬间贴回标题下方。
+    /// 取 <c>Visible</c> 后，"初值为 <c>Collapsed</c>"必然产生一次值变化并触发回调，
+    /// 首次落地由回调直接落位，方向反了也同样自洽。
+    /// </remarks>
     public static readonly DependencyProperty AnimatedVisibilityProperty =
         DependencyProperty.RegisterAttached(
             "AnimatedVisibility",
             typeof(Visibility),
             typeof(AnimatedVisibilityHelper),
-            new PropertyMetadata(Visibility.Collapsed, OnAnimatedVisibilityChanged));
+            new PropertyMetadata(Visibility.Visible, OnAnimatedVisibilityChanged));
 
     /// <summary>读取淡入淡出时长（秒）。</summary>
     public static double GetDuration(DependencyObject obj)
@@ -73,6 +85,8 @@ public static class AnimatedVisibilityHelper
             _firstApplied.Add(d, new object());
         }
 
+        CancelPendingCollapse(element);
+
         if (target == Visibility.Visible)
         {
             element.Visibility = Visibility.Visible;
@@ -86,30 +100,54 @@ public static class AnimatedVisibilityHelper
             element.BeginAnimation(
                 UIElement.OpacityProperty,
                 new System.Windows.Media.Animation.DoubleAnimation(0, 1, duration));
+            return;
         }
-        else
+
+        if (first)
         {
-            if (first)
+            element.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        // 先淡出，动画结束后再收起，避免硬切。
+        var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
+            element.Opacity, 0, duration);
+        element.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+
+        // 兜底收起：淡出被后续动画打断时 Completed 不会触发，元素会以 opacity 0
+        // 继续占据布局空间，把下方内容顶偏。用计时器保证"目标为 Collapsed 时
+        // 最终一定收起"，不再依赖动画是否跑完。
+        var timer = new DispatcherTimer
+        {
+            Interval = duration + TimeSpan.FromMilliseconds(40),
+        };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            CancelPendingCollapse(element);
+
+            // 期间若又被切回可见，则不收起。
+            if (GetAnimatedVisibility(d) == Visibility.Collapsed)
             {
                 element.Visibility = Visibility.Collapsed;
-                return;
             }
-
-            // 先淡出，动画结束后再收起，避免硬切。
-            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
-                element.Opacity, 0, duration);
-            fadeOut.Completed += (_, _) =>
-            {
-                // 期间若又被切回可见，则不收起。
-                if (GetAnimatedVisibility(d) == Visibility.Collapsed)
-                {
-                    element.Visibility = Visibility.Collapsed;
-                }
-            };
-            element.BeginAnimation(UIElement.OpacityProperty, fadeOut);
-        }
+        };
+        _pendingCollapse.AddOrUpdate(d, timer);
+        timer.Start();
     }
 
     /// <summary>记录每个元素是否已做过首次落地，避免启动期闪动。</summary>
     private static readonly ConditionalWeakTable<DependencyObject, object> _firstApplied = new();
+
+    /// <summary>记录待执行的收起计时器，便于目标转回可见时取消。</summary>
+    private static readonly ConditionalWeakTable<DependencyObject, DispatcherTimer> _pendingCollapse = new();
+
+    private static void CancelPendingCollapse(UIElement element)
+    {
+        if (_pendingCollapse.TryGetValue(element, out var timer))
+        {
+            timer.Stop();
+            _pendingCollapse.Remove(element);
+        }
+    }
 }
