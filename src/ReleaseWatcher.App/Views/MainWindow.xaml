@@ -1236,15 +1236,19 @@
                                                                     CornerRadius="{StaticResource Radius.Badge}">
                                                                 <TextBlock Style="{StaticResource Text.Caption}"
                                                                            Foreground="{DynamicResource Brush.Accent}"
-                                                                           Text="最新">
-                                                                    <TextBlock.Visibility>
-                                                                        <MultiBinding Converter="{StaticResource AreEqualToVisibilityConverter}">
-                                                                            <Binding Path="TagName" />
-                                                                            <Binding Path="DataContext.SelectedRow.LatestRelease.TagName"
-                                                                                     ElementName="ReposPage" />
-                                                                        </MultiBinding>
-                                                                    </TextBlock.Visibility>
-                                                                </TextBlock>
+                                                                           Text="最新" />
+                                                                <!--
+                                                                    整颗胶囊按"是否最新合格项"决定可见性：
+                                                                    非最新项整颗折叠，避免只剩 Padding 撑出的空白蓝块
+                                                                    （2026-10-12 用户要求：去除无文字的蓝色标签）。
+                                                                -->
+                                                                <Border.Visibility>
+                                                                    <MultiBinding Converter="{StaticResource AreEqualToVisibilityConverter}">
+                                                                        <Binding Path="TagName" />
+                                                                        <Binding Path="DataContext.SelectedRow.LatestRelease.TagName"
+                                                                                 ElementName="ReposPage" />
+                                                                    </MultiBinding>
+                                                                </Border.Visibility>
                                                             </Border>
 
                                                             <!--
@@ -1277,11 +1281,30 @@
                                                         </StackPanel>
                                                     </Grid>
 
-                                                    <!-- 第二行：发布日期（"最新"已在上面用胶囊表达，此处不再重复前缀） -->
-                                                    <TextBlock Grid.Row="1"
-                                                               Margin="{StaticResource Space.Padding.Top.XS}"
-                                                               Style="{StaticResource Text.Secondary}"
-                                                               Text="{Binding PublishedAt, StringFormat={}{0:yyyy-MM-dd}}" />
+                                                    <!-- 第二行：发布日期；当前/已知版本那一行右侧追加"·当前版本" -->
+                                                    <StackPanel Grid.Row="1"
+                                                                Orientation="Horizontal"
+                                                                Margin="{StaticResource Space.Padding.Top.XS}">
+                                                        <TextBlock Style="{StaticResource Text.Secondary}"
+                                                                   Text="{Binding PublishedAt, StringFormat={}{0:yyyy-MM-dd}}" />
+                                                        <!--
+                                                            当前/已知版本（检测依据的 KnownVersion）对应的 Release：
+                                                            在日期右侧追加"·当前版本"，与上方"最新"胶囊区分开
+                                                            （2026-10-12 用户要求）。无匹配时整段折叠。
+                                                        -->
+                                                        <TextBlock Margin="6,0,0,0"
+                                                                   Style="{StaticResource Text.Caption}"
+                                                                   Foreground="{DynamicResource Brush.Text.Secondary}"
+                                                                   Text="·当前版本">
+                                                            <TextBlock.Visibility>
+                                                                <MultiBinding Converter="{StaticResource AreEqualToVisibilityConverter}">
+                                                                    <Binding Path="TagName" />
+                                                                    <Binding Path="DataContext.SelectedRow.CurrentVersionTag"
+                                                                             ElementName="ReposPage" />
+                                                                </MultiBinding>
+                                                            </TextBlock.Visibility>
+                                                        </TextBlock>
+                                                    </StackPanel>
                                                 </Grid>
                                                 <DataTemplate.Triggers>
                                                     <!-- 预发布：整颗胶囊改橙色 -->
@@ -1343,8 +1366,9 @@
                                                 <!--
                                                     有新版本：强调胶囊 —— 描边 + 淡底，
                                                     与历史栏"最新"（纯淡底）区分开。
+                                                    左侧留白与"正式版/预发布"通道胶囊隔开（2026-10-12 用户要求）。
                                                 -->
-                                                <Border Margin="{StaticResource Space.Margin.Right.S}"
+                                                <Border Margin="8,0,0,0"
                                                         Padding="8,3"
                                                         Background="{DynamicResource Brush.Accent.Soft}"
                                                         BorderBrush="{DynamicResource Brush.Accent}"
