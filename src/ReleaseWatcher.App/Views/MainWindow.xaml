@@ -1295,7 +1295,7 @@
                                                         <TextBlock Margin="6,0,0,0"
                                                                    Style="{StaticResource Text.Caption}"
                                                                    Foreground="{DynamicResource Brush.Text.Secondary}"
-                                                                   Text="·当前版本">
+                                                                   Text="· 当前版本">
                                                             <TextBlock.Visibility>
                                                                 <MultiBinding Converter="{StaticResource AreEqualToVisibilityConverter}">
                                                                     <Binding Path="TagName" />
