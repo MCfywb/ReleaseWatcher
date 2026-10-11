@@ -356,6 +356,7 @@ public sealed partial class RepositoryListViewModel : ObservableObject
     private bool _isBusy;
     private string _lastRunText = "尚未检测";
     private Visibility _emptyStateVisibility = Visibility.Visible;
+    private Visibility _listVisibility = Visibility.Collapsed;
     private RepositoryRowViewModel? _selectedRow;
     private Release? _selectedRelease;
 
@@ -532,11 +533,25 @@ public sealed partial class RepositoryListViewModel : ObservableObject
 
     /// <summary>列表内容的可见性；与 <see cref="EmptyStateVisibility"/> 互斥。</summary>
     /// <remarks>
+    /// <para>
     /// 单独暴露而非让界面写 <c>Converter</c>：一对互斥的可见性
     /// 用两个已算好的属性表达，比引入转换器更直白，
     /// 也不必为它新增一个类型。
+    /// </para>
+    /// <para>
+    /// <b>必须走 <c>SetProperty</c>，不能写成自动属性。</b>
+    /// 自动属性的 setter 只赋值、不发 <c>PropertyChanged</c>，
+    /// 绑定了它的三栏 Grid（<c>ReposSplit</c>）就永远收不到"变可见"的通知，
+    /// 会一直停在收起态 —— 表现为检测完成后三栏整块空白
+    /// （2026-10-12 用户截图）。此前之所以看不出问题，是因为
+    /// <c>AnimatedVisibilityHelper</c> 的默认值恰好能掩盖这次断链。
+    /// </para>
     /// </remarks>
-    public Visibility ListVisibility { get; private set; } = Visibility.Collapsed;
+    public Visibility ListVisibility
+    {
+        get => _listVisibility;
+        private set => SetProperty(ref _listVisibility, value);
+    }
 
     // ==================== 三栏空态与派生显示状态 ====================
     // 以下属性全部由 SelectedRow / SelectedRelease 推导，
