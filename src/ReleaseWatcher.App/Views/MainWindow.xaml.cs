@@ -66,11 +66,13 @@ public partial class MainWindow : Window
     public MainWindow(
         IAppPaths paths,
         RepositoryListViewModel repositoryList,
-        OverviewViewModel overview)
+        OverviewViewModel overview,
+        SettingsViewModel settings)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(repositoryList);
         ArgumentNullException.ThrowIfNull(overview);
+        ArgumentNullException.ThrowIfNull(settings);
 
         InitializeComponent();
 
@@ -83,6 +85,10 @@ public partial class MainWindow : Window
         // 检测列表页通过 {Binding DataContext.RepositoryList, RelativeSource=...}
         // 取用同一实例（见 MainWindow.xaml）。
         DataContext = overview;
+
+        // 设置页与概览/检测无关（无共享检测结果），单独给DataContext，
+        // 免得为了取 Token 而把凭据状态挂到概览 ViewModel 上。
+        SettingsPage.DataContext = settings;
 
         // Taskbar / Alt+Tab 仍需要窗口标题；标题栏上显示的应用名由 XAML 承担。
         Title = "ReleaseWatcher";
@@ -892,6 +898,26 @@ public partial class MainWindow : Window
             {
                 ThemeManager.TrySaveTheme(_paths.ConfigFile, theme);
             }
+        }
+    }
+
+    /// <summary>
+    /// 把密码框内容转交给 <see cref="SettingsViewModel.TokenInput"/>。
+    /// </summary>
+    /// <remarks>
+    /// <see cref="PasswordBox"/> 不支持绑定，只能在这里搬运取值；
+    /// 保存、清除与状态文案仍全部在 ViewModel 里，此处不含业务逻辑。
+    /// <para>
+    /// 必须容忍"取不到 DataContext"：<c>PasswordChanged</c> 在
+    /// <c>InitializeComponent</c> 期间就可能触发，那时
+    /// <see cref="SettingsPage"/> 的 DataContext 尚未赋值。
+    /// </para>
+    /// </remarks>
+    private void TokenInputBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (SettingsPage.DataContext is SettingsViewModel settings && sender is PasswordBox box)
+        {
+            settings.TokenInput = box.Password;
         }
     }
 }
