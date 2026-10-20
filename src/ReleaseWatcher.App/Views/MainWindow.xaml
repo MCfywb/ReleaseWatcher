@@ -1067,7 +1067,8 @@
                                     anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding EmptyStateVisibility}">
                             <TextBlock Style="{StaticResource PlaceholderTitle}" Text="尚无监控仓库" />
                             <TextBlock Style="{StaticResource PlaceholderBody}"
-                                       Text="点击「立即检查」开始检测。当前使用内置样例数据演示。" />
+                                       TextWrapping="Wrap"
+                                       Text="监控的仓库来自数据目录下的 config.json（C1 阶段先用配置文件，SQLite 接入后由应用接管）。在配置文件中加入 &quot;repositories&quot; 数组后重启应用即可，例如：&#xA;{ &quot;repositories&quot;: [ &quot;dotnet/runtime&quot; ] }&#xA;可在 &quot;knownVersions&quot; 中为每个仓库填写已安装版本，用于判断是否有新版本。" />
                         </StackPanel>
 
                         <!--
@@ -1506,6 +1507,51 @@
                     <ScrollViewer Padding="{StaticResource Size.ContentPadding}"
                                   HorizontalScrollBarVisibility="Disabled">
                         <StackPanel MaxWidth="640">
+
+                            <TextBlock Style="{StaticResource Text.SectionTitle}"
+                                       Text="GitHub" />
+
+                            <Border Margin="{StaticResource Space.Padding.Top.M}"
+                                    Background="{DynamicResource Brush.Surface}"
+                                    BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="{StaticResource Space.Padding.M}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Text.CardTitle}"
+                                               Text="访问 Token（可选）" />
+                                    <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                               Style="{StaticResource Text.Secondary}"
+                                               TextWrapping="Wrap"
+                                               Text="Token 保存在 Windows 凭据管理器中，不写入配置文件、不显示在界面上。不填也能用：将以匿名方式访问公开仓库（每小时 60 次）；配置后限额提升至每小时 5000 次，并可访问私有仓库。" />
+
+                                    <!--
+                                        PasswordBox 不支持绑定，因此这里只把输入转交给
+                                        SettingsViewModel.TokenInput，真正的保存/清除逻辑
+                                        仍在 ViewModel 中（此处仅做取值搬运）。
+                                    -->
+                                    <PasswordBox x:Name="TokenInputBox"
+                                                 Margin="{StaticResource Space.Padding.Top.M}"
+                                                 Style="{StaticResource PasswordBox.Base}"
+                                                 PasswordChanged="TokenInputBox_PasswordChanged" />
+
+                                    <StackPanel Margin="{StaticResource Space.Padding.Top.S}"
+                                                Orientation="Horizontal">
+                                        <Button Margin="{StaticResource Space.Margin.Right.S}"
+                                                Style="{StaticResource Button.Primary}"
+                                                Content="保存 Token"
+                                                Command="{Binding SaveTokenCommand}" />
+                                        <Button Style="{StaticResource Button.Secondary}"
+                                                Content="清除 Token"
+                                                Command="{Binding ClearTokenCommand}" />
+                                    </StackPanel>
+
+                                    <TextBlock Margin="{StaticResource Space.Padding.Top.S}"
+                                               Style="{StaticResource Text.Secondary}"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding TokenStatusText}" />
+                                </StackPanel>
+                            </Border>
 
                             <TextBlock Style="{StaticResource Text.SectionTitle}"
                                        Text="外观" />
