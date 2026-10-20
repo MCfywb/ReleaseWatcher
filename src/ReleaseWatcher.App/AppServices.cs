@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Net.Http;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -9,6 +10,9 @@ using ReleaseWatcher.App.Services;
 using ReleaseWatcher.App.ViewModels;
 using ReleaseWatcher.Application.Abstractions;
 using ReleaseWatcher.Application.Services;
+using ReleaseWatcher.Infrastructure.Configuration;
+using ReleaseWatcher.Infrastructure.GitHub;
+using ReleaseWatcher.Infrastructure.Security;
 using ReleaseWatcher.Infrastructure.Windows;
 
 namespace ReleaseWatcher.App;
@@ -64,12 +68,35 @@ public static class AppServices
         // 且 Known Folder 查询有原生调用开销，不宜每次注入都解析。
         services.AddSingleton<IAppPaths, AppPaths>();
 
-        // IReleaseFeed 当前只有内存样例实现。
+        // GitHub Token 存Windows 凭据管理器（DECISIONS.md D-053 / Q-001）。
+        // 单例：它本身无状态，读写都直接打到系统凭据 API。
+        services.AddSingleton<ITokenStore, WindowsCredentialManagerTokenStore>();
+
+        // 监控仓库与已知版本来自 config.json；C2 接入 SQLite 后换实现即可，
+        // 界面与用例只认IAppConfiguration（依赖倒置）。
+        services.AddSingleton<IAppConfiguration>(sp =>
+            new JsonAppConfiguration(sp.GetRequiredService<IAppPaths>().ConfigFile));
+
+        // HttpClient 单例复用（每请求新建会耗尽端口）。
         //
-        // ⚠ 临时状态：真实的 GitHub API 客户端尚未实现
-        // （Infrastructure/GitHub/ 仍为空目录）。GitHub 客户端落地后，
-        // 只需把下面的注册换成真实实现，界面与ViewModel 均无需改动。
-        services.AddSingleton<IReleaseFeed, SampleReleaseFeed>();
+        // 代理：不设 Proxy，保留HttpClientHandler 的默认行为 ——
+        // 在 Windows 上即读取系统代理设置，含 PAC / WPAD（D-001 的代理要求）。
+        services.AddSingleton(_ => new HttpClient(new HttpClientHandler
+        {
+            UseProxy = true,
+            AllowAutoRedirect = true,
+        })
+        {
+            // GitHub 请求本身很快；给足 30s 以容纳慢速代理链路，
+            // 超时由调用方转成"检测失败"，不会挂住界面。
+            Timeout = TimeSpan.FromSeconds(30),
+        });
+
+        // 真实数据源：GitHub REST API（D-053 选型：BCL HttpClient，不引 Octokit）。
+        // 换成样例数据只需把这里改回 SampleReleaseFeed，其余代码不动。
+        services.AddSingleton<IReleaseFeed>(sp => new GitHubReleaseFeed(
+            sp.GetRequiredService<HttpClient>(),
+            sp.GetRequiredService<ITokenStore>()));
     }
 
     /// <summary>注册应用层用例。</summary>
@@ -90,20 +117,25 @@ public static class AppServices
         // 会出现"概览说有3 个更新、列表里只列出 2 个"这类矛盾。
         //
         // 用工厂注册而非直接 AddSingleton<T>：两者构造函数需要
-        // "仓库列表"与"已知版本表"两个函数参数 —— 真实实现里它们
-        // 会来自 SQLite 持久化（候选 C），届时只需换掉工厂内的
-        // 取数方式，ViewModel 本身不必改动。
+        // "仓库列表"与"已知版本表"两个函数参数。两者现由 config.json 提供
+        // （C1）；C2 接入 SQLite 后只需换掉这里的取数方式，
+        // ViewModel 本身不必改动。
         services.AddSingleton(sp =>
-            new RepositoryListViewModel(
+        {
+            var configuration = sp.GetRequiredService<IAppConfiguration>();
+
+            return new RepositoryListViewModel(
                 sp.GetRequiredService<IReleaseFeed>(),
                 sp.GetRequiredService<ReleaseDetectionService>(),
-                () => SampleReleaseFeed.SampleRepositories,
-                repository => SampleReleaseFeed.KnownVersions.TryGetValue(repository, out var v)
-                    ? v
-                    : null));
+                () => configuration.MonitoredRepositories,
+                configuration.GetKnownVersion);
+        });
 
         services.AddSingleton(sp =>
             new OverviewViewModel(sp.GetRequiredService<RepositoryListViewModel>()));
+
+        // 设置页只与凭据有关，与检测结果无关，单独一个单例。
+        services.AddSingleton<SettingsViewModel>();
     }
 
     /// <summary>
