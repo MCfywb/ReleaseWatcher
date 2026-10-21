@@ -67,12 +67,14 @@ public partial class MainWindow : Window
         IAppPaths paths,
         RepositoryListViewModel repositoryList,
         OverviewViewModel overview,
-        SettingsViewModel settings)
+        SettingsViewModel settings,
+        ProxySettingsViewModel proxy)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(repositoryList);
         ArgumentNullException.ThrowIfNull(overview);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(proxy);
 
         InitializeComponent();
 
@@ -89,6 +91,10 @@ public partial class MainWindow : Window
         // 设置页与概览/检测无关（无共享检测结果），单独给DataContext，
         // 免得为了取 Token 而把凭据状态挂到概览 ViewModel 上。
         SettingsPage.DataContext = settings;
+
+        // 代理卡片单独一个 DataContext：它与凭据无关，混在一起会让改代理
+        // 顺带触发 Token 状态刷新。
+        NetworkCard.DataContext = proxy;
 
         // PasswordBox 不能绑定，只能双向手工同步：
         // 上行 PasswordChanged → TokenInput（已有）；下行 TokenInput 变化 → Password，

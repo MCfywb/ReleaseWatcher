@@ -5,6 +5,7 @@ using ReleaseWatcher.Application.Abstractions;
 using ReleaseWatcher.Domain.Exceptions;
 using ReleaseWatcher.Domain.ValueObjects;
 using ReleaseWatcher.Infrastructure.GitHub;
+using ReleaseWatcher.Infrastructure.Proxy;
 
 namespace ReleaseWatcher.Infrastructure.Tests;
 
@@ -55,6 +56,29 @@ public class GitHubReleaseFeedTests
         public void Clear() => _token = null;
     }
 
+
+    /// <summary>
+    /// 用伪 handler 构造 feed：走 ConfigurableHttpInvoker 的内部构造，
+    /// 既保持生产路径（代理设置 → invoker）一致，又能截断网络。
+    /// </summary>
+    private static GitHubReleaseFeed CreateFeed(HttpMessageHandler handler, ITokenStore tokenStore)
+        => new(new ConfigurableHttpInvoker(new StubProxySettings(), _ => new HttpClient(handler)), tokenStore);
+
+    private sealed class StubProxySettings : IProxySettings
+    {
+        public ProxySettings Current { get; private set; } = ProxySettings.Default;
+
+        public event EventHandler? Changed;
+
+        public SystemProxyStatus ReadSystemStatus() => new(false, null, null, null);
+
+        public void Update(ProxySettings settings)
+        {
+            Current = settings;
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     private static RepositoryRef Repo()
         => RepositoryRef.TryParse("dotnet/runtime", out var r)
             ? r!
@@ -98,7 +122,7 @@ public class GitHubReleaseFeedTests
         """;
 
         var handler = new StubHandler(_ => Json(body));
-        var feed = new GitHubReleaseFeed(new HttpClient(handler), new StubTokenStore());
+        var feed = CreateFeed(handler, new StubTokenStore());
 
         var releases = await feed.GetReleasesAsync(Repo());
 
@@ -122,7 +146,7 @@ public class GitHubReleaseFeedTests
     {
         var handler = new StubHandler(_ => Json("[]"));
         var tokenStore = new StubTokenStore { TokenToReturn = "ghp_example" };
-        var feed = new GitHubReleaseFeed(new HttpClient(handler), tokenStore);
+        var feed = CreateFeed(handler, tokenStore);
 
         await feed.GetReleasesAsync(Repo());
 
@@ -139,7 +163,7 @@ public class GitHubReleaseFeedTests
     public async Task GetReleasesAsync_WithoutToken_OmitsAuthorization()
     {
         var handler = new StubHandler(_ => Json("[]"));
-        var feed = new GitHubReleaseFeed(new HttpClient(handler), new StubTokenStore());
+        var feed = CreateFeed(handler, new StubTokenStore());
 
         await feed.GetReleasesAsync(Repo());
 
@@ -150,9 +174,7 @@ public class GitHubReleaseFeedTests
     [Fact]
     public async Task GetReleasesAsync_NotFound_ExplainsRepositoryOrToken()
     {
-        var feed = new GitHubReleaseFeed(
-            new HttpClient(new StubHandler(_ => Json("{}", HttpStatusCode.NotFound))),
-            new StubTokenStore());
+        var feed = CreateFeed(new StubHandler(_ => Json("{}", HttpStatusCode.NotFound)), new StubTokenStore());
 
         var ex = await Assert.ThrowsAsync<ReleaseFeedException>(
             () => feed.GetReleasesAsync(Repo()));
@@ -170,9 +192,7 @@ public class GitHubReleaseFeedTests
         response.Headers.TryAddWithoutValidation("X-RateLimit-Remaining", "0");
         response.Headers.TryAddWithoutValidation("X-RateLimit-Reset", "1800000000");
 
-        var feed = new GitHubReleaseFeed(
-            new HttpClient(new StubHandler(_ => response)),
-            new StubTokenStore());
+        var feed = CreateFeed(new StubHandler(_ => response), new StubTokenStore());
 
         var ex = await Assert.ThrowsAsync<ReleaseFeedException>(
             () => feed.GetReleasesAsync(Repo()));
@@ -184,9 +204,7 @@ public class GitHubReleaseFeedTests
     [Fact]
     public async Task GetReleasesAsync_NetworkFailure_BecomesFeedException()
     {
-        var feed = new GitHubReleaseFeed(
-            new HttpClient(new ThrowingHandler()),
-            new StubTokenStore());
+        var feed = CreateFeed(new ThrowingHandler(), new StubTokenStore());
 
         var ex = await Assert.ThrowsAsync<ReleaseFeedException>(
             () => feed.GetReleasesAsync(Repo()));

@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Net.Http;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -12,6 +11,7 @@ using ReleaseWatcher.Application.Abstractions;
 using ReleaseWatcher.Application.Services;
 using ReleaseWatcher.Infrastructure.Configuration;
 using ReleaseWatcher.Infrastructure.GitHub;
+using ReleaseWatcher.Infrastructure.Proxy;
 using ReleaseWatcher.Infrastructure.Security;
 using ReleaseWatcher.Infrastructure.Windows;
 
@@ -77,25 +77,20 @@ public static class AppServices
         services.AddSingleton<IAppConfiguration>(sp =>
             new JsonAppConfiguration(sp.GetRequiredService<IAppPaths>().ConfigFile));
 
-        // HttpClient 单例复用（每请求新建会耗尽端口）。
-        //
-        // 代理：不设 Proxy，保留HttpClientHandler 的默认行为 ——
-        // 在 Windows 上即读取系统代理设置，含 PAC / WPAD（D-001 的代理要求）。
-        services.AddSingleton(_ => new HttpClient(new HttpClientHandler
-        {
-            UseProxy = true,
-            AllowAutoRedirect = true,
-        })
-        {
-            // GitHub 请求本身很快；给足 30s 以容纳慢速代理链路，
-            // 超时由调用方转成"检测失败"，不会挂住界面。
-            Timeout = TimeSpan.FromSeconds(30),
-        });
+        // 代理配置：可在设置页切换"跟随系统 / 直连 / 自定义"，写入 config.json。
+        // 读取系统代理现状走 WinHTTP P/Invoke，不引入 Microsoft.Win32.Registry 包。
+        services.AddSingleton<IProxySettings>(sp => new JsonProxySettings(
+            sp.GetRequiredService<IAppPaths>().ConfigFile));
+
+        // HTTP 调用器按当前代理设置提供；设置一变即重建（handler 的代理属性构造时固定）。
+        // 默认"跟随系统"即 UseProxy=true 且不设 Proxy —— 在 Windows 上由 .NET 解析
+        // 系统代理，含 PAC / WPAD（D-001 的代理要求）。
+        services.AddSingleton<ConfigurableHttpInvoker>();
 
         // 真实数据源：GitHub REST API（D-053 选型：BCL HttpClient，不引 Octokit）。
         // 换成样例数据只需把这里改回 SampleReleaseFeed，其余代码不动。
         services.AddSingleton<IReleaseFeed>(sp => new GitHubReleaseFeed(
-            sp.GetRequiredService<HttpClient>(),
+            sp.GetRequiredService<ConfigurableHttpInvoker>(),
             sp.GetRequiredService<ITokenStore>()));
     }
 
@@ -136,6 +131,9 @@ public static class AppServices
 
         // 设置页只与凭据有关，与检测结果无关，单独一个单例。
         services.AddSingleton<SettingsViewModel>();
+
+        // 代理设置页同样独立成单例：它只读写 IProxySettings，不碰检测结果。
+        services.AddSingleton<ProxySettingsViewModel>();
     }
 
     /// <summary>

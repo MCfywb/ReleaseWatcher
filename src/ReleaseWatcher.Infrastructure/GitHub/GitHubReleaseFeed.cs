@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using ReleaseWatcher.Application.Abstractions;
 using ReleaseWatcher.Application.Exceptions;
+using ReleaseWatcher.Infrastructure.Proxy;
 using ReleaseWatcher.Domain.Entities;
 using ReleaseWatcher.Domain.Exceptions;
 using ReleaseWatcher.Domain.ValueObjects;
@@ -46,18 +47,22 @@ public sealed class GitHubReleaseFeed : IReleaseFeed
     /// <summary>GitHub 要求所有请求带 User-Agent，否则返回 403。</summary>
     private const string UserAgent = "ReleaseWatcher/0.1";
 
-    private readonly HttpClient _client;
+    private readonly ConfigurableHttpInvoker _invoker;
     private readonly ITokenStore _tokenStore;
 
     /// <summary>构造客户端。</summary>
-    /// <param name="client">已配置好的 HTTP 客户端（代理、超时由组合根决定）。</param>
+    /// <param name="invoker">
+    /// 按当前代理设置提供的调用器。刻意不直接收 <see cref="HttpClient"/>：
+    /// 用户在设置页改代理后需要立即生效，而 handler 的代理属性在构造时就固定了
+    /// （见 <c>ConfigurableHttpInvoker</c>）。
+    /// </param>
     /// <param name="tokenStore">Token 来源；读不到时按匿名调用处理。</param>
-    public GitHubReleaseFeed(HttpClient client, ITokenStore tokenStore)
+    public GitHubReleaseFeed(ConfigurableHttpInvoker invoker, ITokenStore tokenStore)
     {
-        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(invoker);
         ArgumentNullException.ThrowIfNull(tokenStore);
 
-        _client = client;
+        _invoker = invoker;
         _tokenStore = tokenStore;
     }
 
@@ -102,7 +107,7 @@ public sealed class GitHubReleaseFeed : IReleaseFeed
         HttpResponseMessage response;
         try
         {
-            response = await _client.SendAsync(request, cancellationToken);
+            response = await _invoker.Current.SendAsync(request, cancellationToken);
         }
         catch (HttpRequestException ex)
         {

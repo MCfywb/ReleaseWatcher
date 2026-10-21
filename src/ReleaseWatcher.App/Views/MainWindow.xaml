@@ -1592,6 +1592,74 @@
                             </Border>
 
                             <TextBlock Style="{StaticResource Text.SectionTitle}"
+                                       Text="网络" />
+
+                            <!--
+                                代理设置：ProxySettingsViewModel 单独作为设置页的第二个
+                                DataContext 挂在 NetworkCard 上，不与 Token 的 VM 混在一起 ——
+                                两者互不相关，混在一个 VM 里会让"改代理"触发凭据相关刷新。
+                            -->
+                            <Border x:Name="NetworkCard"
+                                    Margin="{StaticResource Space.Padding.Top.M}"
+                                    Background="{DynamicResource Brush.Surface}"
+                                    BorderBrush="{DynamicResource Brush.Border.Subtle}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="{StaticResource Space.Padding.M}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Text.CardTitle}"
+                                               Text="访问 GitHub 的代理" />
+                                    <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                               Style="{StaticResource Text.Secondary}"
+                                               TextWrapping="Wrap"
+                                               Text="默认跟随 Windows 的系统代理设置（含 PAC 与 WPAD 自动配置）。若公司网络强制代理、或系统代理不可用，可改为直连或手工填写代理地址。" />
+
+                                    <StackPanel Margin="{StaticResource Space.Padding.Top.M}"
+                                                Orientation="Horizontal">
+                                        <TextBlock Margin="{StaticResource Space.Margin.Right.S}"
+                                                   VerticalAlignment="Center"
+                                                   Style="{StaticResource Text.Secondary}"
+                                                   Text="方式" />
+                                        <ComboBox Width="160"
+                                                  SelectedIndex="{Binding ModeIndex, Mode=TwoWay}">
+                                            <ComboBoxItem Content="跟随系统" />
+                                            <ComboBoxItem Content="直连（不使用代理）" />
+                                            <ComboBoxItem Content="自定义代理" />
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <StackPanel Margin="{StaticResource Space.Padding.Top.S}"
+                                                Orientation="Horizontal"
+                                                Visibility="{Binding IsManualMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <TextBlock Margin="{StaticResource Space.Margin.Right.S}"
+                                                   VerticalAlignment="Center"
+                                                   Style="{StaticResource Text.Secondary}"
+                                                   Text="代理地址" />
+                                        <TextBox Width="220"
+                                                 VerticalAlignment="Center"
+                                                 Style="{StaticResource TextBox.Base}"
+                                                 Text="{Binding ManualServer, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+
+                                    <StackPanel Margin="{StaticResource Space.Padding.Top.S}"
+                                                Orientation="Horizontal">
+                                        <Button Margin="{StaticResource Space.Margin.Right.S}"
+                                                Style="{StaticResource Button.Primary}"
+                                                Content="应用"
+                                                Command="{Binding ApplyCommand}" />
+                                        <Button Style="{StaticResource Button.Secondary}"
+                                                Content="恢复跟随系统"
+                                                Command="{Binding ResetCommand}" />
+                                    </StackPanel>
+
+                                    <TextBlock Margin="{StaticResource Space.Padding.Top.S}"
+                                               Style="{StaticResource Text.Secondary}"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding StatusText}" />
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Style="{StaticResource Text.SectionTitle}"
                                        Text="外观" />
 
                             <Border Margin="{StaticResource Space.Padding.Top.M}"
