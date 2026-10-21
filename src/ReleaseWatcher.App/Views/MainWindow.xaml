@@ -1417,10 +1417,33 @@
                                             <!-- ===== 区块二：发布说明（面板内滚动） ===== -->
                                             <TextBlock Style="{StaticResource Text.CardTitle}"
                                                        Text="发布说明" />
-                                            <TextBlock Margin="{StaticResource Space.Padding.Top.S}"
-                                                       Style="{StaticResource Text.Body}"
-                                                       Text="{Binding DetailNotes}"
-                                                       TextWrapping="Wrap" />
+
+                                            <!--
+                                                发布说明按 Markdown 渲染（标题、列表、代码、表格、
+                                                粗斜体、链接）。宿主用 RichTextBox 而非
+                                                FlowDocumentScrollViewer：外层已经是 ScrollViewer，
+                                                内层再嵌一个可滚动控件会出现双滚动条。
+
+                                                注意：RichTextBox.Document 是普通 CLR 属性、
+                                                不是依赖属性，因此**不能**用 {Binding} ——
+                                                写了会在 InitializeComponent 时抛
+                                                XamlParseException，编译期毫无察觉（D-048 第 3 条）。
+                                                文档对象在 MainWindow 里随 ViewModel 的
+                                                DetailNotesDocument 变化同步赋值。
+                                                颜色在渲染器里用 SetResourceReference 绑定主题资源，
+                                                因此切换深浅主题时已渲染内容会跟着变。
+                                            -->
+                                            <RichTextBox x:Name="NotesBox"
+                                                         Margin="{StaticResource Space.Padding.Top.S}"
+                                                         Style="{StaticResource ReadOnlyText.Base}" />
+
+                                            <StackPanel Margin="{StaticResource Space.Padding.Top.XS}"
+                                                        HorizontalAlignment="Left"
+                                                        anim:AnimatedVisibilityHelper.AnimatedVisibility="{Binding ToggleNotesVisibility}">
+                                                <Button Style="{StaticResource Button.Secondary}"
+                                                        Content="{Binding ToggleNotesText}"
+                                                        Command="{Binding ToggleNotesCommand}" />
+                                            </StackPanel>
                                             <TextBlock Margin="{StaticResource Space.Padding.Top.S}"
                                                        Visibility="{Binding SelectedRelease.HtmlUrl, Converter={StaticResource NullToVisibilityConverter}}">
                                                 <Hyperlink NavigateUri="{Binding SelectedRelease.HtmlUrl}"

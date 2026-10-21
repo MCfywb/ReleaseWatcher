@@ -452,6 +452,46 @@
     <Style TargetType="PasswordBox" BasedOn="{StaticResource PasswordBox.Base}" />
 
     <!-- ============================================================
+         RichTextBox（只读文本宿主）
+         ============================================================
+         用途：承载 FlowDocument（发布说明的 Markdown 渲染结果）。
+         必须做成"看起来就是一段文字"——它在这里不是输入框，
+         所以去掉边框、背景、焦点虚线、选中高亮与制表位，
+         并设为不可聚焦，避免抢走外层列表的键盘导航。
+         ============================================================ -->
+
+    <Style x:Key="ReadOnlyText.Base" TargetType="RichTextBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+        <Setter Property="FontFamily" Value="{StaticResource Font.UI}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RichTextBox">
+                    <!--
+                        不套 Border：只读文本不需要边框，而透明背景 + 无边框
+                        才能让它与普通 TextBlock 在视觉上完全一致。
+                    -->
+                    <ScrollViewer x:Name="PART_ContentHost"
+                                  Focusable="False"
+                                  Margin="0"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Disabled" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="RichTextBox" BasedOn="{StaticResource ReadOnlyText.Base}" />
+
+    <!-- ============================================================
          CheckBox
          ============================================================ -->
 

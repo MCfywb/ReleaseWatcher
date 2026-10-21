@@ -2,12 +2,14 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Documents;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 using ReleaseWatcher.Application.Abstractions;
 using ReleaseWatcher.Application.Services;
+using ReleaseWatcher.App.Rendering;
 using ReleaseWatcher.Domain.Entities;
 using ReleaseWatcher.Domain.Rules;
 using ReleaseWatcher.Domain.ValueObjects;
@@ -388,6 +390,8 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         // 三栏选择：左栏选中仓库、中栏选中 Release、以及窄屏下的"返回上一级"。
         SelectRepositoryCommand = new RelayCommand<RepositoryRowViewModel>(SelectRepository);
         SelectReleaseCommand = new RelayCommand<Release>(SelectRelease);
+
+        ToggleNotesCommand = new RelayCommand(ToggleNotes);
         BackCommand = new RelayCommand(Back);
 
         // 逐资产下载（过渡实现：交给系统默认浏览器，见 DownloadAsset 注释）。
@@ -657,7 +661,7 @@ public sealed partial class RepositoryListViewModel : ObservableObject
             ? Visibility.Visible
             : Visibility.Collapsed;
 
-    /// <summary>右栏发布说明正文；无说明时给明确占位文案而非空白。</summary>
+    /// <summary>右栏发布说明正文（纯文本）；Markdown 渲染后的版本见 <see cref="DetailNotesDocument"/>。</summary>
     /// <remarks>
     /// 领域约定 Notes 为空字符串表示"未附说明"（见 <c>Release.Notes</c>），
     /// 空白格会被误读为"内容还没加载"。
@@ -666,6 +670,78 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         => string.IsNullOrEmpty(SelectedRelease?.Notes)
             ? "本次发布未附带说明。"
             : SelectedRelease!.Notes;
+
+    /// <summary>折叠状态下最多展示的顶层块数。</summary>
+    /// <remarks>
+    /// 取 4 是权衡结果：既能看出"下面还有"，又不会让用户以为说明只有这几行。
+    /// 按块而非按字符/行切分，是因为 Markdown 的语义在块边界上。
+    /// </remarks>
+    private const int NotesCollapsedBlockLimit = 4;
+
+    /// <summary>发布说明的渲染结果（Markdown → FlowDocument）。</summary>
+    /// <remarks>
+    /// 由 <see cref="RefreshNotes"/> 重建；折叠状态或选中的 Release 变化时才重算，
+    /// 避免每次派生属性通知都重新解析一遍 Markdown。
+    /// </remarks>
+    public FlowDocument DetailNotesDocument { get; private set; } = new();
+
+    /// <summary>发布说明是否已展开。</summary>
+    public bool DetailNotesExpanded { get; private set; }
+
+    /// <summary>发布说明是否长到需要折叠（决定展开/收起按钮是否出现）。</summary>
+    public bool DetailNotesExpandable { get; private set; }
+
+    /// <summary>展开/收起按钮文案。</summary>
+    public string ToggleNotesText => DetailNotesExpanded ? "收起" : "展开";
+
+    /// <summary>展开/收起按钮的可见性；说明不需折叠时隐藏，避免给一个无效开关。</summary>
+    public Visibility ToggleNotesVisibility
+        => DetailNotesExpandable ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>切换发布说明的展开/收起。</summary>
+    public RelayCommand ToggleNotesCommand { get; }
+
+    /// <summary>重新渲染发布说明；无变化时什么都不做。</summary>
+    /// <param name="force">为 <c>true</c> 时忽略缓存，强制重算。</param>
+    private void RefreshNotes(bool force = false)
+    {
+        var tag = _selectedRelease?.TagName ?? string.Empty;
+
+        if (!force && tag == _notesRenderedTag && _notesExpandedWhenRendered == DetailNotesExpanded)
+        {
+            return;
+        }
+
+        _notesRenderedTag = tag;
+        _notesExpandedWhenRendered = DetailNotesExpanded;
+
+        var notes = _selectedRelease?.Notes ?? string.Empty;
+
+        // 是否需要折叠必须按完整文本判断：折叠状态下渲染的只是前几块，
+        // 若拿截断后的结果去判断，展开按钮会永远消失。
+        DetailNotesExpandable = MarkdownFlowRenderer.NeedsCollapse(notes, NotesCollapsedBlockLimit);
+        DetailNotesDocument = MarkdownFlowRenderer.Render(
+            notes,
+            DetailNotesExpanded ? null : NotesCollapsedBlockLimit);
+
+        OnPropertyChanged(nameof(DetailNotesDocument));
+        OnPropertyChanged(nameof(DetailNotesExpandable));
+        OnPropertyChanged(nameof(ToggleNotesVisibility));
+    }
+
+    private string _notesRenderedTag = string.Empty;
+    private bool _notesExpandedWhenRendered;
+
+    /// <summary>展开/收起发布说明。</summary>
+    private void ToggleNotes()
+    {
+        DetailNotesExpanded = !DetailNotesExpanded;
+
+        RefreshNotes(force: true);
+
+        OnPropertyChanged(nameof(DetailNotesExpanded));
+        OnPropertyChanged(nameof(ToggleNotesText));
+    }
 
     /// <summary>选中态变化后，统一通知所有派生显示属性。</summary>
     private void RaiseSelectionVisualState()
@@ -685,6 +761,18 @@ public sealed partial class RepositoryListViewModel : ObservableObject
         OnPropertyChanged(nameof(DetailIsDraft));
         OnPropertyChanged(nameof(DetailUpdatePillVisibility));
         OnPropertyChanged(nameof(DetailNotes));
+
+        // 换 Release 时收起，避免上一条的长说明在下一条上仍是展开的
+        if (!DetailNotesExpanded)
+        {
+            RefreshNotes();
+        }
+        else
+        {
+            _notesExpandedWhenRendered = false;
+            _notesRenderedTag = string.Empty;
+            RefreshNotes(force: true);
+        }
     }
 
     /// <summary>

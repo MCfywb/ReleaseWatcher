@@ -8,6 +8,16 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+
+    <!--
+      发布说明的 Markdown 渲染。选型见 DECISIONS.md D-054：
+      MIT、net10.0 原生程序集、零传递依赖，且活跃（1.4.2 发布于两周内）。
+      仅用其解析能力（Markdown.Parse），渲染到 WPF FlowDocument 由本项目自写，
+      以便颜色走 DynamicResource 随深浅主题切换。
+      注意：按 D-052 的教训，引入后必须先跑一次完整 build 确认 WPF 的
+      _wpftmp 临时项目也能编译通过，再动手写渲染器。
+    -->
+    <PackageReference Include="Markdig" Version="1.4.2" />
   </ItemGroup>
 
   <PropertyGroup>

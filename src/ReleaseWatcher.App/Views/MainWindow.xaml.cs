@@ -150,6 +150,18 @@ public partial class MainWindow : Window
         MasterList.PreviewMouseLeftButtonDown += PaneList_PreviewMouseLeftButtonDown;
         HistoryList.PreviewMouseLeftButtonDown += PaneList_PreviewMouseLeftButtonDown;
 
+        // 发布说明文档同步：RichTextBox.Document 是普通 CLR 属性而非依赖属性，
+        // 不能用 {Binding}（会在 InitializeComponent 时抛 XamlParseException，
+        // 编译期完全无感 —— AGENTS.md §1.6.1 第 3 条），只能在这里手工赋值。
+        NotesBox.Document = repositoryList.DetailNotesDocument;
+        _repositoryList.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(RepositoryListViewModel.DetailNotesDocument))
+            {
+                NotesBox.Document = _repositoryList.DetailNotesDocument;
+            }
+        };
+
         // 三栏宽度比例：读取用户上次拖拽保存的值（config.json layout.reposColumns），
         // 没有则用默认比例。拖拽结束（DragCompleted）时把新的星型宽度归一化保存。
         _reposColumnRatios = LayoutPreferences.LoadReposColumnRatios(paths.ConfigFile)
