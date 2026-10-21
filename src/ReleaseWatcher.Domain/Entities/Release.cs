@@ -1,3 +1,4 @@
+using ReleaseWatcher.Domain.Rules;
 using ReleaseWatcher.Domain.ValueObjects;
 
 namespace ReleaseWatcher.Domain.Entities;
@@ -135,13 +136,34 @@ public sealed class Release : IEquatable<Release>
                 nameof(tagName));
         }
 
+        // 预发布判定分三层，优先级从高到低：
+        //   1. 数据源显式标志（GitHub 的 prerelease 勾选）—— 权威，见既有约定；
+        //   2. 版本号自身的 SemVer 预发布段（-beta.1、-alpha.2 等）；
+        //   3. tag 文本里的预发布标识词 —— 只在"版本看起来是正式版或根本解析不出"
+        //      时兜底升级（2026-10-21 用户要求：1.2.3 Release Candidate、
+        //      v1.2.3-RC 这类写法不能被当成正式版）。
+        //
+        // 第 3 层刻意不干预第 1、2 层已表态的情况：
+        // "v1.0.0-beta.1 + 数据源说不是预发布" 属于数据源的判断，
+        // 由 ReleaseTests.Create_ExplicitPrerelease_OverridesVersionInference 锁定。
+        //
+        // 括号不可省：C# 中 ?? 的优先级低于 ||，不写括号会被解析成
+        // "isPrerelease ?? ... ?? (false || 关键词判定)"，
+        // 显式传入 isPrerelease: false 时整个表达式被 ?? 短路成 false。
+        var baseIsPrerelease = isPrerelease ?? version?.IsPrerelease ?? false;
+        var versionLooksStable = version?.IsPrerelease != true;
+
+        var effectiveIsPrerelease = baseIsPrerelease
+                                   || (versionLooksStable
+                                       && PrereleaseTagMatcher.ContainsPrereleaseKeyword(effectiveTag));
+
         return new Release(
             repository,
             version,
             effectiveTag!,
             string.IsNullOrWhiteSpace(title) ? effectiveTag! : title.Trim(),
             isDraft,
-            isPrerelease ?? version?.IsPrerelease ?? false,
+            effectiveIsPrerelease,
             publishedAt ?? default,
             assets ?? Array.Empty<ReleaseAsset>(),
             htmlUrl,
