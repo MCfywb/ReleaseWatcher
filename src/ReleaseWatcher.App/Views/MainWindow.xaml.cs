@@ -90,6 +90,23 @@ public partial class MainWindow : Window
         // 免得为了取 Token 而把凭据状态挂到概览 ViewModel 上。
         SettingsPage.DataContext = settings;
 
+        // PasswordBox 不能绑定，只能双向手工同步：
+        // 上行 PasswordChanged → TokenInput（已有）；下行 TokenInput 变化 → Password，
+        // 后者是"保存/清除 Token 后清空输入框"能生效的前提 ——
+        // 只做上行时，ViewModel 把 TokenInput 置空，框里的字却还留着。
+        TokenInputBox.PasswordChanged += TokenInputBox_PasswordChanged;
+        settings.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(SettingsViewModel.TokenInput))
+            {
+                return;
+            }
+
+            // 赋值会再触发 PasswordChanged，把同一个值写回 ViewModel ——
+            // 值相同则 SetProperty 直接返回，不会形成循环。
+            TokenInputBox.Password = settings.TokenInput;
+        };
+
         // Taskbar / Alt+Tab 仍需要窗口标题；标题栏上显示的应用名由 XAML 承担。
         Title = "ReleaseWatcher";
 

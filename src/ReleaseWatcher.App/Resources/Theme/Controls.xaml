@@ -395,7 +395,19 @@
         <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="{StaticResource Space.Padding.Input}" />
+
+        <!--
+            密码框的内缩刻意比普通输入框小，且只在这里施加一次。
+
+            两点原因：
+            1. PasswordBox 渲染的是密码字符（默认 U+2022），其字形自带左侧留白，
+               叠加文本框那套 16px 内缩后，首字符与边框之间的空隙明显大于
+               普通输入框（2026-10-21 用户反馈）。
+            2. 内缩施加在边框的 Padding 上，而不是内容宿主的外边距 ——
+               后者会与控件自身对 Padding 的处理叠加，出现"说不清多出来
+               多少"的空隙。
+        -->
+        <Setter Property="Padding" Value="0" />
         <Setter Property="MinHeight" Value="32" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
@@ -407,10 +419,10 @@
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="{StaticResource Radius.Input}"
+                            Padding="8,6"
                             SnapsToDevicePixels="True">
                         <ScrollViewer x:Name="PART_ContentHost"
                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                      Margin="{TemplateBinding Padding}"
                                       Focusable="False"
                                       HorizontalScrollBarVisibility="Hidden"
                                       VerticalScrollBarVisibility="Hidden" />

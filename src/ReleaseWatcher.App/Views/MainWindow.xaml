@@ -1528,14 +1528,27 @@
                                                Text="Token 保存在 Windows 凭据管理器中，不写入配置文件、不显示在界面上。不填也能用：将以匿名方式访问公开仓库（每小时 60 次）；配置后限额提升至每小时 5000 次，并可访问私有仓库。" />
 
                                     <!--
-                                        PasswordBox 不支持绑定，因此这里只把输入转交给
-                                        SettingsViewModel.TokenInput，真正的保存/清除逻辑
-                                        仍在 ViewModel 中（此处仅做取值搬运）。
+                                        设置页的说明与详情页的"查看完整 Release"共用同一个外链处理器：
+                                        统一由系统默认浏览器打开，程序不自己处理协议。
+                                    -->
+                                    <TextBlock Margin="{StaticResource Space.Padding.Top.XS}"
+                                               Style="{StaticResource Text.Secondary}"
+                                               TextWrapping="Wrap">
+                                        <Run Text="不确定 Token 怎么创建？见 " />
+                                        <Hyperlink NavigateUri="https://docs.github.com/zh/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token"
+                                                   RequestNavigate="ReleaseLink_RequestNavigate">
+                                            <Run Text="GitHub 官方文档：创建细粒度 Personal Access Token" />
+                                        </Hyperlink>
+                                    </TextBlock>
+
+                                    <!--
+                                        PasswordBox 不支持绑定，取值的上行同步在
+                                        MainWindow 构造函数里订阅 PasswordChanged 完成
+                                        （下行同步也在那里，两处放一起才看得出是一对）。
                                     -->
                                     <PasswordBox x:Name="TokenInputBox"
                                                  Margin="{StaticResource Space.Padding.Top.M}"
-                                                 Style="{StaticResource PasswordBox.Base}"
-                                                 PasswordChanged="TokenInputBox_PasswordChanged" />
+                                                 Style="{StaticResource PasswordBox.Base}" />
 
                                     <StackPanel Margin="{StaticResource Space.Padding.Top.S}"
                                                 Orientation="Horizontal">
