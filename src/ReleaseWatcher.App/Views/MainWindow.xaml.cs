@@ -129,6 +129,10 @@ public partial class MainWindow : Window
         // 必须在 InitializeComponent() 之后（ReposPage 等子控件已创建）注册。
         WireReposResponsive();
 
+        // 左栏/中栏：单击已选中项即取消选中。
+        MasterList.PreviewMouseLeftButtonDown += PaneList_PreviewMouseLeftButtonDown;
+        HistoryList.PreviewMouseLeftButtonDown += PaneList_PreviewMouseLeftButtonDown;
+
         // 三栏宽度比例：读取用户上次拖拽保存的值（config.json layout.reposColumns），
         // 没有则用默认比例。拖拽结束（DragCompleted）时把新的星型宽度归一化保存。
         _reposColumnRatios = LayoutPreferences.LoadReposColumnRatios(paths.ConfigFile)
@@ -919,6 +923,60 @@ public partial class MainWindow : Window
         {
             settings.TokenInput = box.Password;
         }
+    }
+
+    /// <summary>
+    /// 单击已选中的项即取消选中（左栏仓库 / 中栏 Release）。
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// WPF 的 ListBox 点击已选中项时不会取消选中（保持选中），
+    /// 与用户预期的"再点一下取消"不符，故在预览事件里接管。
+    /// </para>
+    /// <para>
+    /// 必须在 <c>Preview</c> 阶段处理并置 <c>e.Handled</c>：
+    /// 否则 ListBox 会在冒泡阶段把刚清掉的选中又设回去。
+    /// 点到别的项时不做任何事，交给默认行为选中它。
+    /// </para>
+    /// <para>
+    /// 取消后的空态由 ViewModel 既有逻辑接管：左栏清空 → 中栏与右栏退回空态；
+    /// 中栏清空 → 右栏显示"选择一个版本以显示详情"。
+    /// </para>
+    /// </remarks>
+    private void PaneList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not ListBox list)
+        {
+            return;
+        }
+
+        var item = FindListBoxItem(e.OriginalSource as DependencyObject);
+        if (item?.DataContext is null)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(list.SelectedItem, item.DataContext))
+        {
+            list.SelectedItem = null;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>从事件源向上找到所属的 <see cref="ListBoxItem"/>。</summary>
+    private static ListBoxItem? FindListBoxItem(DependencyObject? source)
+    {
+        while (source is not null && source is not Visual)
+        {
+            if (source is ListBoxItem item)
+            {
+                return item;
+            }
+
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        return null;
     }
 }
 

@@ -1113,7 +1113,8 @@
                                                    Style="{StaticResource Text.Secondary}"
                                                    Text="{Binding Rows.Count}" />
                                     </Grid>
-                                    <ListBox Style="{StaticResource PaneList}"
+                                    <ListBox x:Name="MasterList"
+                                             Style="{StaticResource PaneList}"
                                              ItemContainerStyle="{StaticResource PaneListItem}"
                                              ItemsSource="{Binding Rows}"
                                              SelectedItem="{Binding SelectedRow}">
@@ -1211,7 +1212,8 @@
                                                Margin="{StaticResource Space.Margin.M}"
                                                Text="{Binding HistoryEmptyText}"
                                                Visibility="{Binding HistoryEmptyVisibility}" />
-                                    <ListBox Style="{StaticResource PaneList}"
+                                    <ListBox x:Name="HistoryList"
+                                             Style="{StaticResource PaneList}"
                                              ItemContainerStyle="{StaticResource PaneListItem}"
                                              ItemsSource="{Binding SelectedRow.Releases}"
                                              SelectedItem="{Binding SelectedRelease}"
