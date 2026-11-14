@@ -370,7 +370,7 @@ public static class ThemeManager
     /// <list type="bullet">
     /// <item>轮询注册表：简单但要么有延迟要么空耗 CPU，且生命周期问题依旧。</item>
     /// <item>WMI <c>RegistryValueChangeEvent</c>：可行，但需引入 <c>System.Management</c> 依赖、
-    /// 在 .NET 10 上行为不够稳定，且部分环境会失败。</item>
+    /// 在 .NET 上行为不够稳定，且部分环境会失败。</item>
     /// <item><see cref="SystemEvents"/>：系统提供的标准通知机制，
     /// 无额外依赖，是本项目的选择。</item>
     /// </list>

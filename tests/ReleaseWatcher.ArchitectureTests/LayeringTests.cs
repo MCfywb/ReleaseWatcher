@@ -178,7 +178,7 @@ public sealed class LayeringTests
     {
         // 单元测试项目与架构测试项目的取舍相反：它**必须**引用被测项目才能拿到类型。
         // 但边界仍要守住 —— 不可引用上游层，也不可引用 App：
-        //   引用 App 会把 WPF 与 net10.0-windows 拖进测试进程，测试无法在非 Windows 上跑。
+        //   引用 App 会把 WPF 与 net11.0-windows 拖进测试进程，测试无法在非 Windows 上跑。
         var references = ReferencedProjects(projectName);
         var allowed = UnitTestAllowedReferences[projectName];
 
@@ -215,7 +215,7 @@ public sealed class LayeringTests
     [InlineData("ReleaseWatcher.Application")]
     [InlineData("ReleaseWatcher.Infrastructure")]
     [InlineData("ReleaseWatcher.App")]
-    public void AllLayerProjects_MustTargetNet10(string projectName)
+    public void AllLayerProjects_MustTargetNet11(string projectName)
     {
         // 防止某个项目被误设为旧版本框架，导致运行时行为差异难以排查。
         var targetFramework = ReadMsBuildProperty(projectName, "TargetFramework");
@@ -223,14 +223,14 @@ public sealed class LayeringTests
         Assert.True(
             !string.IsNullOrWhiteSpace(targetFramework),
             $"{projectName} 未声明 TargetFramework");
-        Assert.Matches(new Regex(@"^net10\.0(-windows)?$"), targetFramework!);
+        Assert.Matches(new Regex(@"^net11\.0(-windows)?$"), targetFramework!);
     }
 
     [Fact]
     public void App_MustTargetWindowsAndUseWpf()
     {
         // 不可移除：整个 UI 层是 WPF，误删会得到一个无界面的控制台程序。
-        Assert.Equal("net10.0-windows", ReadMsBuildProperty("ReleaseWatcher.App", "TargetFramework"));
+        Assert.Equal("net11.0-windows", ReadMsBuildProperty("ReleaseWatcher.App", "TargetFramework"));
         Assert.Equal("true", ReadMsBuildProperty("ReleaseWatcher.App", "UseWPF"));
     }
 }

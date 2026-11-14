@@ -11,8 +11,8 @@ namespace ReleaseWatcher.ArchitectureTests;
 /// <list type="number">
 /// <item>架构检查的对象就是各项目的 <c>.csproj</c> 本身；
 /// 若引用它们，检查逻辑会自我循环。</item>
-/// <item>避免把 App（WPF，net10.0-windows）与全部依赖拖进测试进程 —— 测试项目
-/// 应保持 <c>net10.0</c> 跨平台可用，未来可在 CI 的非 Windows 代理上执行。</item>
+/// <item>避免把 App（WPF，net11.0-windows）与全部依赖拖进测试进程 —— 测试项目
+/// 应保持 <c>net11.0</c> 跨平台可用，未来可在 CI 的非 Windows 代理上执行。</item>
 /// <item>与 D-019 确立的"物理独立、逻辑单向关联"思路一致：
 /// 检查者不侵入被检查者。</item>
 /// </list>

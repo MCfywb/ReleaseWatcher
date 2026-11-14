@@ -9,7 +9,7 @@ rem    The machine PATH resolves dotnet.exe to
 rem    "C:\Program Files (x86)\dotnet\dotnet.exe", which has NO sdk
 rem    directory. Invoking plain "dotnet" there fails with
 rem    "No .NET SDKs were found".
-rem    The real SDK lives in "C:\Program Files\dotnet" (10.0.401).
+rem    The real SDK lives in "C:\Program Files\dotnet" (11.0.100).
 rem    This script therefore uses an absolute path and does NOT
 rem    modify the system PATH. See RUNBOOK.md section 1.
 rem
@@ -115,7 +115,7 @@ rem
 rem Instead, check for the EXE file itself. It only survives when
 rem the process is alive and holding it locked, so its continued
 rem presence after rmdir is a reliable, shell-independent signal.
-if exist "%~dp0src\ReleaseWatcher.App\bin\Release\net10.0-windows\ReleaseWatcher.App.exe" (
+if exist "%~dp0src\ReleaseWatcher.App\bin\Release\net11.0-windows\ReleaseWatcher.App.exe" (
     echo [WARN] ReleaseWatcher.App.exe still present - likely still running and locking its files.
     echo [WARN] Stop it first: taskkill /F /IM ReleaseWatcher.App.exe
     echo [WARN] Otherwise the next build may fail with MSB3021 / MSB3027, or you may test a stale EXE.
