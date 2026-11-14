@@ -7,7 +7,7 @@
 
     注意：本项目**故意不 ProjectReference** 任何主项目，原因见 SolutionLayout.cs：
       1. 检查对象就是各项目的 .csproj 本身，引用它们会造成自我循环；
-      2. 保持 net10.0 跨平台，未来可在非 Windows CI 代理上执行；
+      2. 保持 net11.0 跨平台，未来可在非 Windows CI 代理上执行；
       3. 与 D-019「物理独立、逻辑关联」的思路一致。
 
     覆盖的约束：
@@ -17,7 +17,7 @@
   -->
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -26,7 +26,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="10.1.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>

@@ -6,7 +6,7 @@
     职责：测试 App 层中的 ViewModel 构造逻辑（如 RepositoryRowViewModel 携带 Release 历史）。
 
     引用策略（D-040 的基本原则仍成立，此处为已知例外，已在 NOW.md 记录待办）：
-      D-040 禁止测试项目引用 WPF App，以免把 WPF 与 net10.0-windows 拖进测试进程、
+      D-040 禁止测试项目引用 WPF App，以免把 WPF 与 net11.0-windows 拖进测试进程、
       破坏跨平台测试能力。本机为 Windows，本地 build.cmd test 可正常承载；
       一旦需要在非 Windows 上跑测试，应把被测的"纯构造逻辑"抽到无 WPF 依赖的库再测。
 
@@ -16,7 +16,7 @@
   -->
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net11.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -24,7 +24,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="10.1.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>
